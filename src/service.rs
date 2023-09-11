@@ -1,13 +1,22 @@
-use std::error::Error;
+use async_trait::async_trait;
+
+use crate::{Address, Context};
 
 /// A service is an running like thread
-pub trait Service: Send + Sync {
-    /// Error of service
-    type Error: Error + Send + Sync + 'static;
-
+#[async_trait]
+pub trait Service: Send + Sized + 'static {
     /// Start service
-    fn start(&mut self) -> Result<(), Self::Error>;
+    fn start(self) -> Address<Self> {
+        Context::new().run(self)
+    }
 
-    /// Stop service
-    fn stop(&mut self) -> Result<(), Self::Error>;
+    fn start_by_context(self, ctx: Context<Self>) -> Address<Self> {
+        ctx.run(self)
+    }
+
+    /// Hook for service started
+    async fn started(&mut self, _ctx: &mut Context<Self>) {}
+
+    /// Hook for service stopped
+    async fn stopped(&mut self, _ctx: &mut Context<Self>) {}
 }
