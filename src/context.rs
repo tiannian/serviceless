@@ -51,11 +51,11 @@ where
         let mut service = service;
 
         tokio::spawn(async move {
-            loop {
-                while let Some(mut e) = this.receiver.recv().await {
-                    e.handle(&mut service, &mut this).await;
-                }
+            service.started(&mut this).await;
+            while let Some(mut e) = this.receiver.recv().await {
+                e.handle(&mut service, &mut this).await;
             }
+            service.stopped(&mut this).await;
         });
 
         address

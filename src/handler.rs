@@ -13,6 +13,8 @@ where
     async fn handler(&mut self, message: M, ctx: &mut Context<Self>) -> M::Result;
 }
 
+/// Message
 pub trait Message {
+    /// Result of message
     type Result;
 }

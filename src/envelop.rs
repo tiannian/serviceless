@@ -25,7 +25,7 @@ where
 #[async_trait]
 impl<S> EnvelopProxy<S> for Envelope<S>
 where
-    S: Service + Send,
+    S: Send,
 {
     async fn handle(&mut self, svc: &mut S, ctx: &mut Context<S>) {
         let r = &mut self.0;
@@ -35,10 +35,7 @@ where
 }
 
 #[async_trait]
-pub(crate) trait EnvelopProxy<S>
-where
-    S: Service,
-{
+pub(crate) trait EnvelopProxy<S> {
     async fn handle(&mut self, svc: &mut S, ctx: &mut Context<S>);
 }
 
@@ -66,7 +63,6 @@ where
 
             if rc.send(res).is_err() {
                 log::error!("Channel Closed");
-                panic!("Channel close");
             }
         }
     }

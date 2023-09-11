@@ -10,3 +10,11 @@ async-trait = "0.1.73"
 log = "0.4.20"
 thiserror = "1.0.48"
 tokio = { version = "1.32.0", features = ["sync", "rt"] }
+
+[dev-dependencies]
+tokio = { version = "1.32.0", features = [
+  "rt",
+  "sync",
+  "macros",
+  "rt-multi-thread",
+] }
