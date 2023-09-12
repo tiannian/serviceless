@@ -32,7 +32,7 @@ impl RpcClient {
         })
     }
 
-    pub async fn call<Req, Resp>(&mut self, req: Req) -> Result<RpcResponse<Resp>>
+    pub async fn call<Req, Resp>(&self, req: Req) -> Result<RpcResponse<Resp>>
     where
         Req: Serialize,
         Resp: for<'de> Deserialize<'de>,
@@ -51,10 +51,7 @@ impl RpcClient {
         }
     }
 
-    pub async fn multi_call<Req, Resp>(
-        &mut self,
-        requests: &[Req],
-    ) -> Result<RpcResponseBatch<Resp>>
+    pub async fn multi_call<Req, Resp>(&self, requests: &[Req]) -> Result<RpcResponseBatch<Resp>>
     where
         Req: Serialize,
         Resp: for<'de> Deserialize<'de>,
