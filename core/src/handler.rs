@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::{Context, Service};
+use crate::Service;
 
 /// Handler message on service
 #[async_trait]
@@ -10,7 +10,7 @@ where
     M: Message,
 {
     /// Handle message
-    async fn handler(&mut self, message: M, ctx: &mut Context<Self>) -> M::Result;
+    async fn handler(&mut self, message: M, ctx: &mut Self::Runtime) -> M::Result;
 }
 
 /// Message

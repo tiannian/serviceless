@@ -1,11 +1,15 @@
 [package]
-name = "serviceless-core"
+name = "serviceless-tokio"
 version = "0.1.0"
 edition = "2021"
-description = "An simple actor model in rust, like actix"
-license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 async-trait.workspace = true
+log.workspace = true
+thiserror.workspace = true
+
+serviceless-core.workspace = true
+
+tokio = { version = "1.32.0", features = ["sync", "rt"] }
