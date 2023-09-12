@@ -1,12 +1,12 @@
-use crate::{Service, ServiceAddress};
+use crate::{Address, Service};
 
 /// Runtime of Service
-pub trait ServiceRuntime<S>: Sized
+pub trait Runtime<S>: Sized
 where
     S: Service,
 {
     /// Address
-    type Address: ServiceAddress<S>;
+    type Address: Address<S>;
 
     /// Get service's address
     ///

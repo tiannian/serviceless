@@ -2,3 +2,10 @@
 resolver = "2"
 
 members = ["core", "tokio"]
+
+[workspace.dependencies]
+serviceless-core = { version = "0.1", path = "core" }
+
+async-trait = "0.1.73"
+log = "0.4.20"
+thiserror = "1.0.48"

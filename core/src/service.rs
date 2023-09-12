@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 
-use crate::ServiceRuntime;
+use crate::Runtime;
 
 /// A service is an running like thread
 #[async_trait]
 pub trait Service: Send + Sized + 'static {
-    type Runtime: ServiceRuntime<Self>;
+    type Runtime: Runtime<Self>;
 
     fn start(self, ctx: Self::Runtime) -> AddressOfService<Self> {
         ctx.run(self)
@@ -19,4 +19,4 @@ pub trait Service: Send + Sized + 'static {
 }
 
 /// Address type of service
-pub type AddressOfService<S> = <<S as Service>::Runtime as ServiceRuntime<S>>::Address;
+pub type AddressOfService<S> = <<S as Service>::Runtime as Runtime<S>>::Address;

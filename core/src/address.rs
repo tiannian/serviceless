@@ -6,7 +6,7 @@ use crate::{Handler, Message, Service};
 
 /// Address of service
 #[async_trait]
-pub trait ServiceAddress<S>: Clone
+pub trait Address<S>: Clone
 where
     S: Service,
 {
