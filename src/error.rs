@@ -8,8 +8,8 @@ pub enum Error {
     ServiceStoped,
 
     /// This query is send, can't read result
-    #[error("This query is send, can't read result")]
-    TryToReadSendQueryResult,
+    #[error("Service is paused")]
+    ServicePaused,
 }
 
 /// Result

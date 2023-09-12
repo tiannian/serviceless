@@ -25,11 +25,29 @@ impl Handler<U8> for Service0 {
     }
 }
 
+#[derive(Debug)]
+pub struct U16(pub u16);
+
+impl Message for U16 {
+    type Result = U16;
+}
+
+#[async_trait]
+impl Handler<U16> for Service0 {
+    async fn handler(&mut self, message: U16, _ctx: &mut Context<Self>) -> U16 {
+        U16(message.0 + 300)
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let addr = Service0::default().start();
 
     let res = addr.call(U8(8)).await.unwrap();
 
-    println!("{:?}", res)
+    println!("{:?}", res);
+
+    let res = addr.call(U16(8)).await.unwrap();
+
+    println!("{:?}", res);
 }

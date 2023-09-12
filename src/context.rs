@@ -6,6 +6,7 @@ use crate::{Address, EnvelopProxy, Envelope, Service};
 pub struct Context<S> {
     sender: UnboundedSender<Envelope<S>>,
     receiver: UnboundedReceiver<Envelope<S>>,
+    pub(crate) paused: bool,
 }
 
 impl<S> Default for Context<S> {
@@ -19,7 +20,11 @@ impl<S> Context<S> {
     pub fn new() -> Self {
         let (sender, receiver) = unbounded_channel();
 
-        Self { sender, receiver }
+        Self {
+            sender,
+            receiver,
+            paused: false,
+        }
     }
 
     /// Get service's address
@@ -30,6 +35,10 @@ impl<S> Context<S> {
         Address {
             sender: self.sender.clone(),
         }
+    }
+
+    pub fn pause(&mut self) {
+        self.paused = true;
     }
 
     /// Stop an service
