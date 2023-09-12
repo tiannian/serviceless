@@ -2,48 +2,54 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use crate::{Address, EnvelopProxy, Envelope, Service};
 
+pub trait ServiceContext<S>: Sized {
+    type Config: Default;
+
+    /// Create an empty context
+    fn new(config: Self::Config) -> Self;
+
+    /// Get service's address
+    ///
+    /// Even if service not start, you can also get an address.
+    /// But if you send message, the message maybe lost.
+    fn addr(&self) -> Address<S>;
+
+    /// Stop an service
+    fn stop(&mut self);
+
+    /// Start an service
+    fn run(self, service: S) -> Address<S>;
+}
+
 /// Context to run service
 pub struct Context<S> {
     sender: UnboundedSender<Envelope<S>>,
     receiver: UnboundedReceiver<Envelope<S>>,
 }
 
-impl<S> Default for Context<S> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+impl<S> ServiceContext<S> for Context<S>
+where
+    S: Service + Send,
+{
+    type Config = ();
 
-impl<S> Context<S> {
-    /// Create an empty context
-    pub fn new() -> Self {
+    fn new(_config: ()) -> Self {
         let (sender, receiver) = unbounded_channel();
 
         Self { sender, receiver }
     }
 
-    /// Get service's address
-    ///
-    /// Even if service not start, you can also get an address.
-    /// But if you send message, the message maybe lost.
-    pub fn addr(&self) -> Address<S> {
+    fn addr(&self) -> Address<S> {
         Address {
             sender: self.sender.clone(),
         }
     }
 
-    /// Stop an service
-    pub fn stop(&mut self) {
+    fn stop(&mut self) {
         self.receiver.close()
     }
-}
 
-impl<S> Context<S>
-where
-    S: Service + Send,
-{
-    /// Start an service
-    pub fn run(self, service: S) -> Address<S> {
+    fn run(self, service: S) -> Address<S> {
         let mut this = self;
 
         let address = this.addr();

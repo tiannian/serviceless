@@ -1,0 +1,22 @@
+[package]
+name = "serviceless"
+version = "0.1.0"
+edition = "2021"
+description = "An simple actor model in rust, like actix"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1.73"
+log = "0.4.20"
+thiserror = "1.0.48"
+tokio = { version = "1.32.0", features = ["sync", "rt"] }
+
+[dev-dependencies]
+tokio = { version = "1.32.0", features = [
+  "rt",
+  "sync",
+  "macros",
+  "rt-multi-thread",
+] }
