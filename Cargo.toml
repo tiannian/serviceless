@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 
-members = ["core", "tokio", "command"]
+members = ["core", "tokio", "command", "jsonrpc"]
 
 [workspace.dependencies]
 serviceless-core = { version = "0.1", path = "core" }
