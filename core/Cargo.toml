@@ -9,3 +9,4 @@ license = "MIT"
 
 [dependencies]
 async-trait.workspace = true
+serde.workspace = true

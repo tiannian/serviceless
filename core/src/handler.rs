@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 use crate::Service;
 
@@ -14,7 +15,7 @@ where
 }
 
 /// Message
-pub trait Message {
+pub trait Message: Serialize {
     /// Result of message
-    type Result;
+    type Result: for<'de> Deserialize<'de>;
 }
