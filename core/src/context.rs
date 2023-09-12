@@ -6,7 +6,7 @@ where
     S: Service,
 {
     /// Address
-    type Address: Address<S>;
+    type Address;
 
     /// Get service's address
     ///

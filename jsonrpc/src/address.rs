@@ -1,7 +1,6 @@
-use async_trait::async_trait;
 use serviceless_core::{Address, Handler, Message, Service};
 
-use crate::{Error, Result, RpcClient};
+use crate::{Error, Result, RpcClient, RpcResponse};
 
 #[derive(Clone)]
 pub struct JsonRpcAddress {
@@ -16,29 +15,23 @@ impl JsonRpcAddress {
     }
 }
 
-#[async_trait]
-impl<S> Address<S> for JsonRpcAddress
-where
-    S: Service,
-{
-    type Error = Error;
-
-    async fn is_stop(&self) -> bool {
+impl JsonRpcAddress {
+    pub async fn is_stop(&self) -> bool {
         false
     }
 
-    async fn call<M>(&self, message: M) -> Result<M::Result>
+    /*     async fn call<M>(&self, message: M) -> Result<M::Result>
     where
         M: Message + Send + 'static,
         S: Handler<M>,
         M::Result: Send,
     {
-    }
+        let r: RpcResponse<M::Result> = self.client.call(message).await?;
+    } */
 
-    fn send<M>(&self, message: M) -> Result<()>
+    pub fn send<M>(&self, message: M) -> Result<()>
     where
         M: Message + Send + 'static,
-        S: Handler<M>,
         M::Result: Send,
     {
         Ok(())
