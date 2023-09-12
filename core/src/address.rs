@@ -4,15 +4,19 @@ use async_trait::async_trait;
 
 use crate::{Handler, Message, Service};
 
+/// Address of service
 #[async_trait]
 pub trait ServiceAddress<S>: Clone
 where
     S: Service,
 {
+    /// Error of address
     type Error: Error;
 
+    /// Return true when service stopped.
     async fn is_stop(&self) -> bool;
 
+    /// Call service's handler and get result
     async fn call<M>(&self, message: M) -> Result<M::Result, Self::Error>
     where
         M: Message + Send + 'static,

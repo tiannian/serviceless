@@ -1,9 +1,11 @@
 use crate::{Service, ServiceAddress};
 
+/// Runtime of Service
 pub trait ServiceRuntime<S>: Sized
 where
     S: Service,
 {
+    /// Address
     type Address: ServiceAddress<S>;
 
     /// Get service's address

@@ -18,4 +18,5 @@ pub trait Service: Send + Sized + 'static {
     async fn stopped(&mut self, _ctx: &mut Self::Runtime) {}
 }
 
+/// Address type of service
 pub type AddressOfService<S> = <<S as Service>::Runtime as ServiceRuntime<S>>::Address;
