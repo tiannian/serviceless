@@ -38,7 +38,7 @@ impl Service for Service1 {
 
 #### Start Service
 
-Start a service is very simple, only create it can call `start` method.
+Start a service is very simple, only create it and call `start` method.
 
 ```rust
 let svc = Service1 {};
