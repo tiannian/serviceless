@@ -37,6 +37,9 @@ impl<S> Context<S> {
         }
     }
 
+    /// Pause context
+    ///
+    /// Notice: This funcion is unusable now.
     pub fn pause(&mut self) {
         self.paused = true;
     }

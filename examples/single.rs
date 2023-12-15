@@ -41,7 +41,11 @@ impl Handler<U16> for Service0 {
 
 #[tokio::main]
 async fn main() {
-    let addr = Service0::default().start();
+    let ctx = Context::new();
+
+    let srv = Service0::default();
+
+    let addr = ctx.run(srv);
 
     let res = addr.call(U8(8)).await.unwrap();
 

@@ -5,7 +5,6 @@ use crate::{Address, Context};
 /// A service is an running like thread
 #[async_trait]
 pub trait Service: Send + Sized + 'static {
-    /// Start service
     fn start(self) -> Address<Self> {
         Context::new().run(self)
     }
