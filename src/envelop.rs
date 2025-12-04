@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use tokio::sync::oneshot;
+use futures_channel::oneshot;
 
 use crate::{Context, Handler, Message, Service};
 
@@ -58,12 +58,11 @@ where
         let message = self.message.take();
         let result_channel = self.result_channel.take();
 
-        if let (Some(message), Some(mut rc)) = (message, result_channel) {
+        if let (Some(message), Some(rc)) = (message, result_channel) {
             let res = <S as Handler<M>>::handler(svc, message, ctx).await;
 
             if ctx.paused {
                 log::info!("Call a closed service");
-                rc.closed().await;
             } else if rc.send(res).is_err() {
                 log::warn!("Channel Closed");
             }

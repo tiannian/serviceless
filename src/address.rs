@@ -1,4 +1,4 @@
-use tokio::sync::{mpsc::UnboundedSender, oneshot};
+use futures_channel::{mpsc::UnboundedSender, oneshot};
 
 use crate::{envelop::Envelope, Error, Handler, Message, Result, Service};
 
@@ -35,11 +35,13 @@ where
         S: Handler<M>,
         M::Result: Send,
     {
-        let (sender, receiver) = oneshot::channel();
+        let (sender, receiver) = oneshot::channel::<M::Result>();
 
         let env = Envelope::new(message, Some(sender));
 
-        self.sender.send(env).map_err(|_| Error::ServiceStoped)?;
+        self.sender
+            .unbounded_send(env)
+            .map_err(|_| Error::ServiceStoped)?;
 
         receiver.await.map_err(|_| Error::ServicePaused)
     }
@@ -56,7 +58,9 @@ where
     {
         let env = Envelope::new(message, None);
 
-        self.sender.send(env).map_err(|_| Error::ServiceStoped)?;
+        self.sender
+            .unbounded_send(env)
+            .map_err(|_| Error::ServiceStoped)?;
 
         Ok(())
     }

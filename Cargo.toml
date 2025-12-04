@@ -11,8 +11,9 @@ readme = "README.md"
 [dependencies]
 async-trait = "0.1.80"
 log = "0.4.20"
-thiserror = "1.0.48"
-tokio = { version = "1.37.0", features = ["sync", "rt"] }
+thiserror = "2.0.17"
+futures-channel = "0.3"
+futures-util = "0.3"
 
 [dev-dependencies]
 tokio = { version = "1.37.0", features = [

@@ -45,7 +45,10 @@ async fn main() {
 
     let srv = Service0::default();
 
-    let addr = ctx.run(srv);
+    let (addr, future) = ctx.run(srv);
+
+    // Spawn the service future
+    tokio::spawn(future);
 
     let res = addr.call(U8(8)).await.unwrap();
 

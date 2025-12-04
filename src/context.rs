@@ -1,4 +1,6 @@
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use futures_util::StreamExt;
+use std::future::Future;
 
 use crate::{Address, EnvelopProxy, Envelope, Service};
 
@@ -18,7 +20,7 @@ impl<S> Default for Context<S> {
 impl<S> Context<S> {
     /// Create an empty context
     pub fn new() -> Self {
-        let (sender, receiver) = unbounded_channel();
+        let (sender, receiver) = unbounded();
 
         Self {
             sender,
@@ -46,7 +48,7 @@ impl<S> Context<S> {
 
     /// Stop an service
     pub fn stop(&mut self) {
-        self.receiver.close()
+        self.sender.close_channel()
     }
 }
 
@@ -55,21 +57,24 @@ where
     S: Service + Send,
 {
     /// Start an service
-    pub fn run(self, service: S) -> Address<S> {
+    ///
+    /// Returns the address and a future that should be spawned to run the service.
+    /// The caller is responsible for spawning the returned future using their async runtime.
+    pub fn run(self, service: S) -> (Address<S>, impl Future<Output = ()> + Send) {
         let mut this = self;
 
         let address = this.addr();
 
         let mut service = service;
 
-        tokio::spawn(async move {
+        let future = async move {
             service.started(&mut this).await;
-            while let Some(mut e) = this.receiver.recv().await {
+            while let Some(mut e) = this.receiver.next().await {
                 e.handle(&mut service, &mut this).await;
             }
             service.stopped(&mut this).await;
-        });
+        };
 
-        address
+        (address, future)
     }
 }
