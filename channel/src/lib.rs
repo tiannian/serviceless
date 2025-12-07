@@ -1,14 +1,22 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! A multi-producer, single-consumer channel for sending values across
+//! asynchronous tasks.
+//!
+//! This crate provides an unbounded channel implementation based on futures-rs.
+//!
+//! ## Source
+//!
+//! This implementation is derived from the `futures-channel` crate.
+//! Original code: https://github.com/rust-lang/futures-rs/tree/master/futures-channel
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#![no_std]
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+extern crate alloc;
+
+pub mod mpsc;
+mod queue;
+mod sink;
+
+pub use mpsc::{
+    unbounded, Recv, RecvError, SendError, TryRecvError, TrySendError, UnboundedReceiver,
+    UnboundedSender,
+};

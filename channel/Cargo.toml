@@ -1,6 +1,12 @@
 [package]
 name = "service-channel"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
+futures-core = { version = "0.3" }
+futures-sink = { version = "0.3" }
+
+[features]
+default = ["std"]
+std = ["futures-sink/std", "futures-core/std"]
