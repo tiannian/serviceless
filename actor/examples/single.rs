@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use serviceless::{Context, Handler, Message, Service};
+use serviceless_actor::{Context, Handler, Message, Service};
 
 #[derive(Debug, Default)]
 pub struct Service0 {}
