@@ -4,9 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-futures-core = { version = "0.3" }
-futures-sink = { version = "0.3" }
+futures-core = { workspace = true }
+futures-sink = { workspace = true }
 
 [features]
 default = ["std"]
 std = ["futures-sink/std", "futures-core/std"]
+
+[dev-dependencies]
+futures-util = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros"] }

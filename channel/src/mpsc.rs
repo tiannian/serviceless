@@ -760,3 +760,368 @@ impl<St: ?Sized + Stream + Unpin> Future for Recv<'_, St> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::format;
+    use alloc::string::{String, ToString};
+    use alloc::vec;
+    use alloc::vec::Vec;
+
+    #[test]
+    fn test_basic_send_recv() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        tx.unbounded_send(42).unwrap();
+        assert_eq!(rx.try_recv().unwrap(), 42);
+    }
+
+    #[test]
+    fn test_multiple_sends() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        tx.unbounded_send(1).unwrap();
+        tx.unbounded_send(2).unwrap();
+        tx.unbounded_send(3).unwrap();
+
+        assert_eq!(rx.try_recv().unwrap(), 1);
+        assert_eq!(rx.try_recv().unwrap(), 2);
+        assert_eq!(rx.try_recv().unwrap(), 3);
+    }
+
+    #[test]
+    fn test_multiple_senders() {
+        let (tx1, mut rx) = unbounded::<i32>();
+        let tx2 = tx1.clone();
+
+        tx1.unbounded_send(1).unwrap();
+        tx2.unbounded_send(2).unwrap();
+
+        let mut received = Vec::new();
+        received.push(rx.try_recv().unwrap());
+        received.push(rx.try_recv().unwrap());
+        received.sort();
+        assert_eq!(received, vec![1, 2]);
+    }
+
+    #[test]
+    fn test_try_recv_empty() {
+        let (_tx, mut rx) = unbounded::<i32>();
+
+        assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Empty);
+    }
+
+    #[test]
+    fn test_try_recv_closed() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        drop(tx);
+        assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Closed);
+    }
+
+    #[test]
+    fn test_try_send_after_receiver_dropped() {
+        let (tx, rx) = unbounded::<i32>();
+
+        drop(rx);
+        assert!(tx.unbounded_send(42).is_err());
+    }
+
+    #[test]
+    fn test_receiver_close() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        rx.close();
+        assert!(tx.unbounded_send(42).is_err());
+    }
+
+    #[test]
+    fn test_sender_close_channel() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        tx.close_channel();
+        assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Closed);
+    }
+
+    #[test]
+    fn test_sender_disconnect() {
+        let (mut tx, mut rx) = unbounded::<i32>();
+
+        tx.disconnect();
+        assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Closed);
+    }
+
+    #[test]
+    fn test_receiver_drain_on_drop() {
+        let (tx, rx) = unbounded::<i32>();
+
+        tx.unbounded_send(1).unwrap();
+        tx.unbounded_send(2).unwrap();
+        tx.unbounded_send(3).unwrap();
+
+        drop(rx);
+        // Messages should be drained, sender should see channel as closed
+        assert!(tx.unbounded_send(4).is_err());
+    }
+
+    #[tokio::test]
+    async fn test_stream_poll_next() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        tx.unbounded_send(1).unwrap();
+        tx.unbounded_send(2).unwrap();
+
+        use futures_util::StreamExt;
+        assert_eq!(rx.next().await, Some(1));
+        assert_eq!(rx.next().await, Some(2));
+    }
+
+    #[tokio::test]
+    async fn test_stream_poll_next_closed() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        tx.unbounded_send(1).unwrap();
+        drop(tx);
+
+        use futures_util::StreamExt;
+        assert_eq!(rx.next().await, Some(1));
+        assert_eq!(rx.next().await, None);
+    }
+
+    #[tokio::test]
+    async fn test_recv_future() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        tx.unbounded_send(42).unwrap();
+
+        assert_eq!(rx.recv().await, Ok(42));
+    }
+
+    #[tokio::test]
+    async fn test_recv_future_closed() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        drop(tx);
+
+        assert_eq!(rx.recv().await, Err(RecvError));
+    }
+
+    #[test]
+    fn test_fused_stream_is_terminated() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        assert!(!rx.is_terminated());
+        drop(tx);
+        rx.try_recv().unwrap_err(); // Drain to termination
+        assert!(rx.is_terminated());
+    }
+
+    #[test]
+    fn test_sender_is_closed() {
+        let (tx, rx) = unbounded::<i32>();
+
+        assert!(!tx.is_closed());
+        drop(rx);
+        assert!(tx.is_closed());
+    }
+
+    #[test]
+    fn test_sender_len() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        assert_eq!(tx.len(), 0);
+        tx.unbounded_send(1).unwrap();
+        assert_eq!(tx.len(), 1);
+        tx.unbounded_send(2).unwrap();
+        assert_eq!(tx.len(), 2);
+        rx.try_recv().unwrap();
+        assert_eq!(tx.len(), 1);
+    }
+
+    #[test]
+    fn test_sender_is_empty() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        assert!(tx.is_empty());
+        tx.unbounded_send(1).unwrap();
+        assert!(!tx.is_empty());
+        rx.try_recv().unwrap();
+        assert!(tx.is_empty());
+    }
+
+    #[test]
+    fn test_sender_same_receiver() {
+        let (tx1, _rx) = unbounded::<i32>();
+        let tx2 = tx1.clone();
+        let (tx3, _rx2) = unbounded::<i32>();
+
+        assert!(tx1.same_receiver(&tx2));
+        assert!(!tx1.same_receiver(&tx3));
+    }
+
+    #[test]
+    fn test_sender_is_connected_to() {
+        let (tx, rx) = unbounded::<i32>();
+        let (_tx2, rx2) = unbounded::<i32>();
+
+        assert!(tx.is_connected_to(&rx));
+        assert!(!tx.is_connected_to(&rx2));
+    }
+
+    #[test]
+    fn test_stream_size_hint() {
+        let (tx, rx) = unbounded::<i32>();
+
+        tx.unbounded_send(1).unwrap();
+        tx.unbounded_send(2).unwrap();
+
+        let (lower, upper) = rx.size_hint();
+        assert_eq!(lower, 2);
+        assert_eq!(upper, None);
+    }
+
+    #[test]
+    fn test_stream_size_hint_closed() {
+        let (tx, rx) = unbounded::<i32>();
+
+        tx.unbounded_send(1).unwrap();
+        tx.unbounded_send(2).unwrap();
+        drop(tx);
+
+        let (lower, upper) = rx.size_hint();
+        assert_eq!(lower, 2);
+        assert_eq!(upper, Some(2));
+    }
+
+    #[test]
+    fn test_try_recv_error_is_empty() {
+        assert!(TryRecvError::Empty.is_empty());
+        assert!(!TryRecvError::Empty.is_closed());
+    }
+
+    #[test]
+    fn test_try_recv_error_is_closed() {
+        assert!(!TryRecvError::Closed.is_empty());
+        assert!(TryRecvError::Closed.is_closed());
+    }
+
+    #[test]
+    fn test_send_error_is_disconnected() {
+        let (tx, rx) = unbounded::<i32>();
+        drop(rx);
+
+        let err = tx.unbounded_send(42).unwrap_err();
+        assert!(err.is_disconnected());
+    }
+
+    #[test]
+    fn test_try_send_error_into_inner() {
+        let (tx, rx) = unbounded::<i32>();
+        drop(rx);
+
+        let err = tx.unbounded_send(42).unwrap_err();
+        assert_eq!(err.into_inner(), 42);
+    }
+
+    #[test]
+    fn test_try_send_error_into_send_error() {
+        let (tx, rx) = unbounded::<i32>();
+        drop(rx);
+
+        let err = tx.unbounded_send(42).unwrap_err();
+        let send_err = err.into_send_error();
+        assert!(send_err.is_disconnected());
+    }
+
+    #[test]
+    fn test_clone_sender() {
+        let (tx1, mut rx) = unbounded::<i32>();
+        let tx2 = tx1.clone();
+
+        tx1.unbounded_send(1).unwrap();
+        tx2.unbounded_send(2).unwrap();
+
+        let mut received = Vec::new();
+        received.push(rx.try_recv().unwrap());
+        received.push(rx.try_recv().unwrap());
+        received.sort();
+        assert_eq!(received, vec![1, 2]);
+    }
+
+    #[test]
+    fn test_all_senders_dropped_closes_channel() {
+        let (tx1, mut rx) = unbounded::<i32>();
+        let tx2 = tx1.clone();
+
+        tx1.unbounded_send(1).unwrap();
+        drop(tx1);
+        // Channel should still be open
+        tx2.unbounded_send(2).unwrap();
+
+        drop(tx2);
+        // Now channel should be closed
+        assert_eq!(rx.try_recv().unwrap(), 1);
+        assert_eq!(rx.try_recv().unwrap(), 2);
+        assert_eq!(rx.try_recv().unwrap_err(), TryRecvError::Closed);
+    }
+
+    #[test]
+    fn test_receiver_close_prevents_new_messages() {
+        let (tx, mut rx) = unbounded::<i32>();
+
+        tx.unbounded_send(1).unwrap();
+        rx.close();
+        // Should still be able to receive buffered messages
+        assert_eq!(rx.try_recv().unwrap(), 1);
+        // But new sends should fail
+        assert!(tx.unbounded_send(2).is_err());
+    }
+
+    #[test]
+    fn test_large_number_of_messages() {
+        let (tx, mut rx) = unbounded::<i32>();
+        const COUNT: i32 = 1000;
+
+        for i in 0..COUNT {
+            tx.unbounded_send(i).unwrap();
+        }
+
+        for i in 0..COUNT {
+            assert_eq!(rx.try_recv().unwrap(), i);
+        }
+    }
+
+    #[test]
+    fn test_different_types() {
+        let (tx, mut rx) = unbounded::<String>();
+
+        tx.unbounded_send("hello".to_string()).unwrap();
+        assert_eq!(rx.try_recv().unwrap(), "hello");
+    }
+
+    #[test]
+    fn test_debug_formatting() {
+        let (tx, rx) = unbounded::<i32>();
+
+        let tx_debug = format!("{:?}", tx);
+        assert!(tx_debug.contains("UnboundedSender"));
+
+        let rx_debug = format!("{:?}", rx);
+        assert!(rx_debug.contains("UnboundedReceiver"));
+    }
+
+    #[test]
+    fn test_error_display() {
+        let empty_err = TryRecvError::Empty;
+        assert!(format!("{}", empty_err).contains("empty"));
+
+        let closed_err = TryRecvError::Closed;
+        assert!(format!("{}", closed_err).contains("closed"));
+
+        let (tx, rx) = unbounded::<i32>();
+        drop(rx);
+        let send_err = tx.unbounded_send(42).unwrap_err();
+        assert!(format!("{}", send_err).contains("receiver is gone"));
+    }
+}
