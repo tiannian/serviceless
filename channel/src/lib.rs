@@ -11,8 +11,12 @@
 #![no_std]
 
 extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
 
 pub mod mpsc;
+mod lock;
+pub mod oneshot;
 mod queue;
 mod sink;
 
@@ -20,3 +24,4 @@ pub use mpsc::{
     unbounded, Recv, RecvError, SendError, TryRecvError, TrySendError, UnboundedReceiver,
     UnboundedSender,
 };
+pub use oneshot::{channel, Canceled, Receiver, Sender};
