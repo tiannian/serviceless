@@ -1,6 +1,6 @@
-use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 use std::future::Future;
+use service_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 
 use crate::{Address, EnvelopProxy, Envelope, Service};
 

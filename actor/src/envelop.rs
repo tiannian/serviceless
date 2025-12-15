@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use futures_channel::oneshot;
+use service_channel::oneshot;
 
 use crate::{Context, Handler, Message, Service};
 
