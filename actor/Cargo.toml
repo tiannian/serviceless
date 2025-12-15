@@ -14,7 +14,7 @@ std = []
 
 [dependencies]
 async-trait = { workspace = true }
-service-channel = { path = "../channel" }
+service-channel = { workspace = true }
 futures-util = { workspace = true }
 
 [dev-dependencies]

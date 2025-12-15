@@ -10,6 +10,7 @@ futures-channel = "0.3"
 futures-core = "0.3"
 futures-sink = "0.3"
 futures-util = "0.3"
+service-channel = { path = "./channel" }
 tokio = { version = "1.37.0", features = [
     "rt",
     "sync",
