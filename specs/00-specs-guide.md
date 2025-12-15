@@ -18,17 +18,6 @@ The `specs` directory is used to record and maintain all development standards a
 - `02-architecture.md` - Architecture design specifications
 - `10-testing.md` - Testing specifications
 
-## File Numbering Rules
-
-- `00-09`: Basic specifications and guides (such as this file)
-- `10-19`: Development standards (coding standards, code style, etc.)
-- `20-29`: Architecture and design specifications
-- `30-39`: Testing specifications
-- `40-49`: Documentation specifications
-- `50-59`: Deployment and operations specifications
-- `60-69`: Contribution guidelines
-- `70-99`: Other domain-specific specifications
-
 ## Content Requirements
 
 Each specification file should include:
