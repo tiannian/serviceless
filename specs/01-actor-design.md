@@ -108,6 +108,17 @@ The system defines specific error types:
 - `ServiceStoped`: Returned when trying to send to a stopped service
 - `ServicePaused`: Returned when a service is paused (currently not fully implemented)
 
+### 7. No-Std Support
+
+The actor system must support `no_std` environments:
+
+- **Core Requirement**: The actor module should compile and function without the Rust standard library
+- **Alloc Dependency**: Use the `alloc` crate for heap-allocated types (Vec, String, Box, etc.)
+- **Feature Gating**: Standard library features should be optional and gated behind a `std` feature flag
+- **Runtime Agnostic**: The actor system should remain runtime-agnostic and work with any async runtime that supports no_std
+- **Core Types**: Use `core::future::Future` instead of `std::future::Future` where possible
+- **Conditional Compilation**: Use feature gates to conditionally enable std-specific functionality
+
 ## Architecture Flow
 
 ### Service Startup
