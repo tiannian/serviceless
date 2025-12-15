@@ -82,8 +82,9 @@ struct Inner<T> {
 /// # Examples
 ///
 /// ```
-/// use futures::channel::oneshot;
+/// use service_channel::oneshot;
 /// use std::{thread, time::Duration};
+/// use tokio::runtime::Runtime;
 ///
 /// let (sender, receiver) = oneshot::channel::<i32>();
 ///
@@ -96,7 +97,8 @@ struct Inner<T> {
 ///
 /// println!("MAIN: doing some useful stuff");
 ///
-/// futures::executor::block_on(async {
+/// let rt = Runtime::new().unwrap();
+/// rt.block_on(async {
 ///     println!("MAIN: waiting for msg...");
 ///     println!("MAIN: got: {:?}", receiver.await)
 /// });
