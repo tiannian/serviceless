@@ -82,7 +82,7 @@ Impl Handler on service, we can make a service accept call from other service.
 ```rust
 #[async_trait]
 impl Handler<U8> for Service0 {
-    async fn handler(&mut self, message: U8, _ctx: &mut Context<Self>) -> U8 {
+    async fn handle(&mut self, message: U8, _ctx: &mut Context<Self>) -> U8 {
         U8(message.0 + 2)
     }
 }

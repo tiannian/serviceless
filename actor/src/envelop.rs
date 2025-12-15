@@ -60,7 +60,7 @@ where
         let result_channel = self.result_channel.take();
 
         if let (Some(message), Some(rc)) = (message, result_channel) {
-            let res = <S as Handler<M>>::handler(svc, message, ctx).await;
+            let res = <S as Handler<M>>::handle(svc, message, ctx).await;
 
             if !ctx.paused {
                 let _ = rc.send(res);

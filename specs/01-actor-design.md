@@ -168,7 +168,7 @@ impl Message for MyMessage {
 
 #[async_trait]
 impl Handler<MyMessage> for MyService {
-    async fn handler(&mut self, msg: MyMessage, _ctx: &mut Context<Self>) -> String {
+    async fn handle(&mut self, msg: MyMessage, _ctx: &mut Context<Self>) -> String {
         format!("Received: {}", msg.0)
     }
 }
