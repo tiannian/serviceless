@@ -1,10 +1,5 @@
 use async_trait::async_trait;
 use alloc::boxed::Box;
-
-#[cfg(feature = "std")]
-use std::future::Future;
-
-#[cfg(not(feature = "std"))]
 use core::future::Future;
 
 use crate::{Address, Context};
