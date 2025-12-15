@@ -1,4 +1,4 @@
-use futures_channel::{mpsc::UnboundedSender, oneshot};
+use service_channel::{mpsc::UnboundedSender, oneshot};
 
 use crate::{envelop::Envelope, Error, Handler, Message, Result, Service};
 
