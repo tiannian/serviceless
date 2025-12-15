@@ -78,38 +78,53 @@ Like other serviceless modules, HTTP support should consider `no_std` environmen
 
 ## Type Design
 
-### Request Type
+### BoxBody Type
 
-The `Request` type wraps `http::Request`:
+To simplify the type parameters for `Request` and `Response`, the framework defines a `BoxBody` type:
 
 ```rust
-pub struct Request<B> {
-    inner: http::Request<B>,
+pub type BoxBody = Box<dyn Body + Send>;
+```
+
+Key characteristics:
+- **Type Erasure**: Uses trait objects to erase the concrete body type
+- **Send Bound**: Ensures the body can be sent across thread boundaries
+- **Simplification**: Eliminates the need to specify body types in most cases
+
+### Request Type
+
+The `Request` type wraps `http::Request` and is specialized with `BoxBody`:
+
+```rust
+pub struct Request {
+    inner: http::Request<BoxBody>,
     // Framework-specific extensions
 }
 ```
 
 Key characteristics:
-- **Generic Body Type**: Supports different body types (e.g., `Vec<u8>`, `String`, custom types)
+- **Simplified API**: No generic type parameter needed, always uses `BoxBody`
 - **Access Methods**: Provides methods to access underlying request parts
 - **Extensions**: May include framework-specific extensions (e.g., route parameters, query parameters)
+- **Type Erasure**: The body type is erased through `BoxBody`, simplifying usage
 
 ### Response Type
 
-The `Response` type wraps `http::Response`:
+The `Response` type wraps `http::Response` and is specialized with `BoxBody`:
 
 ```rust
-pub struct Response<B> {
-    inner: http::Response<B>,
+pub struct Response {
+    inner: http::Response<BoxBody>,
     // Framework-specific extensions
 }
 ```
 
 Key characteristics:
-- **Generic Body Type**: Supports different body types
+- **Simplified API**: No generic type parameter needed, always uses `BoxBody`
 - **Builder Methods**: May provide convenient methods for constructing responses
 - **Status Codes**: Easy access to HTTP status codes
 - **Headers**: Convenient header manipulation
+- **Type Erasure**: The body type is erased through `BoxBody`, simplifying usage
 
 ## Integration with Actor Model
 
@@ -126,11 +141,11 @@ HTTP requests can be treated as messages in the actor system:
 ```rust
 // Request message type
 pub struct HttpRequest {
-    request: Request<Body>,
+    request: Request,
 }
 
 impl Message for HttpRequest {
-    type Result = Response<Body>;
+    type Result = Response;
 }
 
 // Service handling HTTP requests
@@ -140,9 +155,9 @@ impl Handler<HttpRequest> for HttpService {
         &mut self, 
         msg: HttpRequest, 
         ctx: &mut Context<Self>
-    ) -> Response<Body> {
+    ) -> Response {
         // Process request and generate response
-        Response::new(Body::from("Hello, World!"))
+        Response::new(BoxBody::from("Hello, World!"))
     }
 }
 ```
@@ -166,8 +181,18 @@ Serviceless HTTP focuses on providing foundation types:
 - **Framework Building**: Higher-level features (routing, middleware, etc.) are built on top
 - **Modularity**: Keeps the core module focused and lightweight
 
+### BoxBody for Type Simplification
+
+The framework uses `BoxBody` to simplify type parameters:
+
+- **Simplification**: Eliminates generic type parameters from `Request` and `Response`
+- **Type Erasure**: Uses trait objects to handle different body types uniformly
+- **Ease of Use**: Makes the API more ergonomic by removing the need to specify body types
+- **Flexibility**: Still allows different body implementations through the `Body` trait
+
 ## Future Considerations
 
+- **Body Trait**: Define the `Body` trait that `BoxBody` implements (may be from `http-body` crate or custom)
 - **Body Types**: Support for streaming bodies and different body representations
 - **Extensions**: Framework-specific extensions (route params, query params, etc.)
 - **Error Handling**: HTTP-specific error types and error responses
