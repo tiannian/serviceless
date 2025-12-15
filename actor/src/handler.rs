@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use alloc::boxed::Box;
 
 use crate::{Context, Service};
 

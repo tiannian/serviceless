@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use alloc::boxed::Box;
 use service_channel::oneshot;
 
 use crate::{Context, Handler, Message, Service};
@@ -62,8 +63,10 @@ where
             let res = <S as Handler<M>>::handler(svc, message, ctx).await;
 
             if ctx.paused {
+                #[cfg(feature = "std")]
                 log::info!("Call a closed service");
             } else if rc.send(res).is_err() {
+                #[cfg(feature = "std")]
                 log::warn!("Channel Closed");
             }
         }

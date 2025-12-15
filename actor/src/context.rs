@@ -1,5 +1,11 @@
 use futures_util::StreamExt;
+
+#[cfg(feature = "std")]
 use std::future::Future;
+
+#[cfg(not(feature = "std"))]
+use core::future::Future;
+
 use service_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 
 use crate::{Address, EnvelopProxy, Envelope, Service};
