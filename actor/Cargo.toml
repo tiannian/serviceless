@@ -10,12 +10,10 @@ readme = "../README.md"
 
 [features]
 default = ["std"]
-std = ["log", "thiserror"]
+std = []
 
 [dependencies]
 async-trait = { workspace = true }
-log = { workspace = true, optional = true }
-thiserror = { workspace = true, optional = true }
 service-channel = { path = "../channel" }
 futures-util = { workspace = true }
 
