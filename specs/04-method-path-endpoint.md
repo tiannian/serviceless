@@ -1,14 +1,14 @@
-# Endpoint Filters
+# Method and Path Endpoints
 
 ## Overview
 
-This document describes the implementation of filter endpoints that provide HTTP method and path filtering capabilities. These endpoints act as middleware-like filters that check request properties and either forward matching requests to downstream services or return error responses for non-matching requests.
+This document describes the implementation of `MethodEndpoint` and `PathEndpoint`, two specialized endpoint implementations that provide HTTP method and path filtering capabilities. These endpoints act as middleware-like filters that check request properties and either forward matching requests to downstream services or return error responses for non-matching requests.
 
 ## Core Concepts
 
 ### Filter Endpoints
 
-Filter endpoints are specialized `Endpoint` implementations that:
+`MethodEndpoint` and `PathEndpoint` are specialized `Endpoint` implementations that:
 
 - **Filter Requests**: Check specific request properties (HTTP method or path)
 - **Conditional Forwarding**: Forward requests to next services only if they match the filter criteria
@@ -300,7 +300,7 @@ Key characteristics:
 
 ### Composition Pattern
 
-Filter endpoints are designed to be composed:
+`MethodEndpoint` and `PathEndpoint` are designed to be composed:
 
 ```
 HttpService (MethodEndpoint::new().get().post())
@@ -319,7 +319,7 @@ In this example:
 
 ### Why Return None for Non-Matching Requests?
 
-Filter endpoints return `None` from `route()` for non-matching requests:
+`MethodEndpoint` and `PathEndpoint` return `None` from `route()` for non-matching requests:
 
 - **Clear Semantics**: `None` clearly indicates the request should be handled locally
 - **Error Handling**: Allows `handle_leaf()` to return appropriate error responses
@@ -328,10 +328,10 @@ Filter endpoints return `None` from `route()` for non-matching requests:
 
 ### Why Forward to First Service Only?
 
-Both filter endpoints forward to `next.first()`:
+Both `MethodEndpoint` and `PathEndpoint` forward to `next.first()`:
 
 - **Simplicity**: Keeps the filtering logic simple and predictable
-- **Single Target**: Filter endpoints typically have one downstream service
+- **Single Target**: These endpoints typically have one downstream service
 - **Composability**: Multiple filters can be chained to achieve complex routing
 - **Flexibility**: More complex routing can be handled by dedicated router endpoints
 
@@ -567,32 +567,38 @@ let response = addr.call(HttpRequest { request: check_request }).await?;
 
 ## Integration with Actor Model
 
-### Filter Endpoints as Actors
+### MethodEndpoint and PathEndpoint as Actors
 
-Filter endpoints participate in the actor system through `HttpService`:
+`MethodEndpoint` and `PathEndpoint` participate in the actor system through `HttpService`:
 
-- **Service Trait**: `HttpService` with filter endpoints implements `Service` trait
+- **Service Trait**: `HttpService` with these endpoints implements `Service` trait
 - **Message Handling**: Handles `HttpRequest` messages through the `Handler` trait
 - **Async Processing**: All filtering and forwarding operations are asynchronous
 - **Address**: Can be addressed via `Address<HttpService>`
 
-### Request Flow Through Filters
+### Request Flow Through MethodEndpoint and PathEndpoint
 
 1. HTTP request arrives as `HttpRequest` message
 2. `HttpService` calls `endpoint.route()` with the request
-3. Filter endpoint checks request properties (method or path)
+3. `MethodEndpoint` or `PathEndpoint` checks request properties (method or path)
 4. If match: request is forwarded to next service via `Address::call()`
 5. If no match: `handle_leaf()` generates error response
 6. Response flows back through the service chain
 
 ## Future Considerations
 
+### PathEndpoint Enhancements
+
 - **Regex Path Matching**: Support for regex-based path patterns in `PathEndpoint`
 - **Wildcard Patterns**: Support for wildcard patterns (e.g., `/api/*/users`)
 - **Path Parameters**: Extract path parameters from matching paths
 - **Case Sensitivity**: Configurable case sensitivity for path matching
 - **Trailing Slash Handling**: Configurable handling of trailing slashes
-- **Custom Error Responses**: Allow customization of error response bodies
-- **Filter Composition**: Helper types for composing multiple filters more easily
-- **Performance**: Consider using `&str` instead of `String` for path patterns to avoid allocations
 - **Path Normalization**: Normalize paths before matching (e.g., remove duplicate slashes)
+- **Performance**: Consider using `&str` instead of `String` for path patterns to avoid allocations
+
+### General Enhancements
+
+- **Custom Error Responses**: Allow customization of error response bodies for both `MethodEndpoint` and `PathEndpoint`
+- **Filter Composition**: Helper types for composing multiple filters more easily
+- **Method Patterns**: Support for method patterns or ranges in `MethodEndpoint`
