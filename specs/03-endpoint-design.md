@@ -78,6 +78,112 @@ Key characteristics:
 - **Multiple Targets**: Supports forwarding to multiple potential services, with the endpoint deciding which one
 - **Type Erasure for Next**: The `next` field uses `Address<HttpService<dyn Endpoint>>` to allow forwarding to services with different endpoint types
 
+### 2.1 Helper Methods
+
+`HttpService` provides convenient helper methods for building and managing service trees:
+
+#### Constructor Methods
+
+```rust
+impl<E: Endpoint> HttpService<E> {
+    /// Create a new HttpService with the given endpoint and no next services
+    pub fn new(endpoint: E) -> Self {
+        Self {
+            endpoint,
+            next: Vec::new(),
+        }
+    }
+    
+    /// Create a new HttpService with the given endpoint and initial next services
+    pub fn with_next(endpoint: E, next: Vec<Address<HttpService<dyn Endpoint>>>) -> Self {
+        Self {
+            endpoint,
+            next,
+        }
+    }
+}
+```
+
+#### Builder Methods
+
+```rust
+impl<E: Endpoint> HttpService<E> {
+    /// Append a next service address to the service tree
+    pub fn append_next(mut self, addr: Address<HttpService<dyn Endpoint>>) -> Self {
+        self.next.push(addr);
+        self
+    }
+    
+    /// Append multiple next service addresses
+    pub fn append_nexts(mut self, addrs: impl IntoIterator<Item = Address<HttpService<dyn Endpoint>>>) -> Self {
+        self.next.extend(addrs);
+        self
+    }
+    
+    /// Set the next services, replacing any existing ones
+    pub fn set_next(mut self, next: Vec<Address<HttpService<dyn Endpoint>>>) -> Self {
+        self.next = next;
+        self
+    }
+    
+    /// Get a reference to the next services
+    pub fn next(&self) -> &[Address<HttpService<dyn Endpoint>>] {
+        &self.next
+    }
+    
+    /// Get a mutable reference to the next services
+    pub fn next_mut(&mut self) -> &mut Vec<Address<HttpService<dyn Endpoint>>> {
+        &mut self.next
+    }
+    
+    /// Get a reference to the endpoint
+    pub fn endpoint(&self) -> &E {
+        &self.endpoint
+    }
+    
+    /// Get a mutable reference to the endpoint
+    pub fn endpoint_mut(&mut self) -> &mut E {
+        &mut self.endpoint
+    }
+}
+```
+
+#### Type Conversion Helpers
+
+```rust
+impl<E: Endpoint> HttpService<E> {
+    /// Convert this service to a boxed trait object for heterogeneous composition
+    /// 
+    /// Note: Since `HttpService<dyn Endpoint>` cannot be directly constructed
+    /// (dyn Endpoint cannot be used as a generic type parameter in this context),
+    /// this method would need to be implemented differently. The actual implementation
+    /// may involve wrapping the service or using a different approach for type erasure.
+    /// 
+    /// For now, address conversion via `Into` trait is the primary mechanism
+    /// for heterogeneous service composition.
+}
+
+// Helper trait for converting Address types
+// This allows automatic conversion when adding addresses to next
+impl<E: Endpoint> From<Address<HttpService<E>>> for Address<HttpService<dyn Endpoint>>
+where
+    E: 'static,
+{
+    fn from(addr: Address<HttpService<E>>) -> Self {
+        // Implementation details for address conversion
+        // This allows automatic conversion when adding addresses to next
+        // The exact mechanism will be determined during implementation
+    }
+}
+```
+
+Key benefits of helper methods:
+- **Convenience**: Simplifies service construction and composition
+- **Builder Pattern**: Supports fluent API for building service trees
+- **Type Safety**: Maintains type safety while providing ergonomic APIs
+- **Flexibility**: Allows both immutable and mutable access patterns
+- **Composability**: Makes it easy to build complex service hierarchies
+
 ### 3. Tree-Like Organization
 
 The design enables tree-like service organization:
@@ -368,12 +474,22 @@ impl Endpoint for HelloEndpoint {
 
 ### Creating an HttpService
 
+Using the constructor:
+
 ```rust
 let endpoint = HelloEndpoint;
-let service = HttpService {
-    endpoint,
-    next: Vec::new(), // No next services
-};
+let service = HttpService::new(endpoint);
+
+let (addr, future) = service.start();
+tokio::spawn(future);
+```
+
+Or using the builder pattern:
+
+```rust
+let service = HttpService::new(HelloEndpoint)
+    .append_next(api_addr)
+    .append_next(static_addr);
 
 let (addr, future) = service.start();
 tokio::spawn(future);
@@ -381,72 +497,89 @@ tokio::spawn(future);
 
 ### Chaining Services
 
-When chaining services with different endpoint types, they need to be converted to `HttpService<dyn Endpoint>` to be stored in the `next` vector:
+When chaining services with different endpoint types, use helper methods for convenient composition:
 
 ```rust
 // Create API service
-let api_endpoint = ApiEndpoint;
-let api_service: HttpService<ApiEndpoint> = HttpService {
-    endpoint: api_endpoint,
-    next: Vec::new(),
-};
+let api_service = HttpService::new(ApiEndpoint);
 let (api_addr, api_future) = api_service.start();
 tokio::spawn(api_future);
 
 // Create static file service
-let static_endpoint = StaticFileEndpoint;
-let static_service: HttpService<StaticFileEndpoint> = HttpService {
-    endpoint: static_endpoint,
-    next: Vec::new(),
-};
+let static_service = HttpService::new(StaticFileEndpoint);
 let (static_addr, static_future) = static_service.start();
 tokio::spawn(static_future);
 
-// Create router service with multiple next services
-// Note: The router service can use a concrete endpoint type
-let router_endpoint = PathRouterEndpoint;
-let router_service: HttpService<PathRouterEndpoint> = HttpService {
-    endpoint: router_endpoint,
-    // Convert addresses to HttpService<dyn Endpoint> for heterogeneous composition
-    // Note: The exact conversion mechanism (e.g., Into trait, helper methods) 
-    // will be determined during implementation
-    next: vec![
-        api_addr.into(),  // Convert Address<HttpService<ApiEndpoint>> to Address<HttpService<dyn Endpoint>>
-        static_addr.into(), // Convert Address<HttpService<StaticFileEndpoint>> to Address<HttpService<dyn Endpoint>>
-    ],
-};
+// Create router service with multiple next services using builder pattern
+let router_service = HttpService::new(PathRouterEndpoint)
+    .append_next(api_addr.into())      // Convert to Address<HttpService<dyn Endpoint>>
+    .append_next(static_addr.into()); // Convert to Address<HttpService<dyn Endpoint>>
+
 let (router_addr, router_future) = router_service.start();
 tokio::spawn(router_future);
 ```
 
-Alternatively, if all services use the same endpoint type, no conversion is needed:
+Alternatively, using `with_next` for initial setup:
+
+```rust
+let router_service = HttpService::with_next(
+    PathRouterEndpoint,
+    vec![
+        api_addr.into(),
+        static_addr.into(),
+    ]
+);
+let (router_addr, router_future) = router_service.start();
+tokio::spawn(router_future);
+```
+
+If all services use the same endpoint type, no conversion is needed:
 
 ```rust
 // All services use the same endpoint type
-let router_endpoint = PathRouterEndpoint;
-let api_endpoint = PathRouterEndpoint; // Same type
-let static_endpoint = PathRouterEndpoint; // Same type
-
-let api_service = HttpService {
-    endpoint: api_endpoint,
-    next: Vec::new(),
-};
+let api_service = HttpService::new(PathRouterEndpoint);
 let (api_addr, api_future) = api_service.start();
 tokio::spawn(api_future);
 
-let static_service = HttpService {
-    endpoint: static_endpoint,
-    next: Vec::new(),
-};
+let static_service = HttpService::new(PathRouterEndpoint);
 let (static_addr, static_future) = static_service.start();
 tokio::spawn(static_future);
 
-let router_service = HttpService {
-    endpoint: router_endpoint,
-    next: vec![api_addr, static_addr], // Same type, no conversion needed
-};
+// Same type, no conversion needed - can use addresses directly
+let router_service = HttpService::new(PathRouterEndpoint)
+    .append_next(api_addr)
+    .append_next(static_addr);
+
 let (router_addr, router_future) = router_service.start();
 tokio::spawn(router_future);
+```
+
+### Building Complex Service Trees
+
+Helper methods make it easy to build complex service hierarchies:
+
+```rust
+// Build a service tree with multiple layers
+let leaf1 = HttpService::new(HelloEndpoint);
+let (leaf1_addr, leaf1_future) = leaf1.start();
+tokio::spawn(leaf1_future);
+
+let leaf2 = HttpService::new(GoodbyeEndpoint);
+let (leaf2_addr, leaf2_future) = leaf2.start();
+tokio::spawn(leaf2_future);
+
+// Middle layer routes to different leaves
+let middle = HttpService::new(PathRouterEndpoint)
+    .append_next(leaf1_addr.into())
+    .append_next(leaf2_addr.into());
+let (middle_addr, middle_future) = middle.start();
+tokio::spawn(middle_future);
+
+// Root layer
+let root = HttpService::new(AuthMiddlewareEndpoint)
+    .append_next(middle_addr.into());
+let (root_addr, root_future) = root.start();
+tokio::spawn(root_future);
 ```
 
 ### Using the Service
