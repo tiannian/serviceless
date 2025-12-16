@@ -11,66 +11,74 @@ The Endpoint design provides a flexible, composable HTTP request handling mechan
 The `Endpoint` trait defines a contract for handling HTTP requests:
 
 - **Purpose**: Provides a uniform interface for processing HTTP requests
-- **Method**: `handle_http()` receives a `Request` and returns a `Response`
+- **Method**: `handle_http()` receives a `Request` and a slice of `Address<HttpService>` references, returns an optional reference to an `Address<HttpService>`
+- **Routing Decision**: Returns `Some(&Address)` to forward the request to that service, or `None` to handle the request itself
 - **Flexibility**: Allows different implementations to handle requests in various ways
 - **Composability**: Endpoints can be composed and chained together
 
 ### HttpService Structure
 
-The `HttpService` is a service that wraps an `Endpoint` and can optionally forward requests to another `HttpService`:
+The `HttpService` is a service that wraps an `Endpoint` and can forward requests to multiple `HttpService` instances:
 
 - **Endpoint**: Contains a `dyn Endpoint` trait object for request processing
-- **Next Service**: Contains an `Option<Address<HttpService>>` for forwarding requests
-- **Tree Structure**: The optional address allows building a tree-like hierarchy of services
-- **Routing Logic**: The outer service can implement custom logic to decide whether and how to forward requests to inner services
+- **Next Services**: Contains a `Vec<Address<HttpService>>` for forwarding requests to multiple services
+- **Tree Structure**: The vector of addresses allows building a tree-like hierarchy of services
+- **Routing Logic**: The endpoint can decide which service (if any) to forward the request to based on the request properties
 
 ## Design Principles
 
 ### 1. Endpoint Trait
 
-The `Endpoint` trait provides a simple, focused interface:
+The `Endpoint` trait provides a routing interface that can select which service to forward to:
 
 ```rust
 #[async_trait]
 pub trait Endpoint: Send + Sync + 'static {
-    async fn handle_http(&self, request: Request) -> Response;
+    async fn handle_http(
+        &self, 
+        request: Request, 
+        next: &[Address<HttpService>]
+    ) -> Option<&Address<HttpService>>;
 }
 ```
 
 Key characteristics:
 - **Async Processing**: All request handling is asynchronous
-- **Ownership**: Takes ownership of the request
-- **Simple Contract**: Single method with clear input/output types
+- **Request Parameter**: Receives the HTTP request to process
+- **Next Services**: Receives a slice of addresses to potential next services
+- **Routing Decision**: Returns `Some(&Address)` to forward to that service, or `None` to handle locally
+- **Reference Return**: Returns a reference to one of the addresses in the `next` slice
 - **Trait Object**: Can be used as `dyn Endpoint` for dynamic dispatch
 
 ### 2. HttpService Structure
 
-The `HttpService` combines an endpoint with optional forwarding capability:
+The `HttpService` combines an endpoint with multiple forwarding targets:
 
 ```rust
 pub struct HttpService {
     endpoint: Box<dyn Endpoint>,
-    next: Option<Address<HttpService>>,
+    next: Vec<Address<HttpService>>,
 }
 ```
 
 Key characteristics:
-- **Endpoint**: The primary request handler
-- **Next Service**: Optional address to another `HttpService` for forwarding
-- **Tree Organization**: The optional address enables hierarchical service structures
+- **Endpoint**: The primary request handler and router
+- **Next Services**: Vector of addresses to other `HttpService` instances for forwarding
+- **Tree Organization**: The vector enables hierarchical service structures with multiple branches
 - **Composability**: Services can be nested and composed in various ways
+- **Multiple Targets**: Supports forwarding to multiple potential services, with the endpoint deciding which one
 
 ### 3. Tree-Like Organization
 
 The design enables tree-like service organization:
 
 - **Root Service**: The outermost `HttpService` receives HTTP requests via its `Address`
-- **Inner Services**: Can be nested through the `next` field
-- **Routing Logic**: Each service can implement custom logic to decide:
-  - Whether to process the request itself
-  - Whether to forward to the next service
-  - How to modify the request before forwarding
-  - How to combine responses from multiple services
+- **Inner Services**: Can be nested through the `next` field (vector of addresses)
+- **Routing Logic**: Each endpoint can implement custom logic to decide:
+  - Whether to process the request itself (return `None`)
+  - Which service in `next` to forward to (return `Some(&Address)`)
+  - How to route based on request properties (path, headers, method, etc.)
+- **Multiple Branches**: The vector allows multiple potential forwarding targets, with the endpoint selecting one
 
 ### 4. Request Flow
 
@@ -78,12 +86,13 @@ The request flow through the service tree:
 
 1. HTTP request arrives at the root `HttpService` via `Address<HttpService>`
 2. Root service receives the request through its message handler
-3. Root service can:
-   - Process the request using its `endpoint`
-   - Forward the request to `next` service (if present)
-   - Combine both approaches (e.g., middleware pattern)
-4. Inner services follow the same pattern recursively
-5. Response flows back through the service chain
+3. Root service calls `endpoint.handle_http(request, &next)`:
+   - Endpoint receives the request and the slice of next service addresses
+   - Endpoint returns `Some(&Address)` to forward, or `None` to handle locally
+4. If endpoint returns `Some(&Address)`, the request is forwarded to that service
+5. If endpoint returns `None`, the service handles the request itself (may need additional logic)
+6. Inner services follow the same pattern recursively
+7. Response flows back through the service chain
 
 ## Architecture
 
@@ -115,22 +124,26 @@ impl Handler<HttpRequest> for HttpService {
         msg: HttpRequest,
         _ctx: &mut Context<Self>,
     ) -> Response {
-        // Process request through endpoint
-        let response = self.endpoint.handle_http(msg.request).await;
-        
-        // Optionally forward to next service
-        if let Some(ref next_addr) = self.next {
-            // Custom routing logic here
-            // For example, forward based on path, headers, etc.
-            let forwarded_response = next_addr.call(HttpRequest {
-                request: msg.request, // or modified request
-            }).await?;
-            
-            // Combine or replace response
-            return forwarded_response;
+        // Call endpoint to decide routing
+        if let Some(next_addr) = self.endpoint.handle_http(msg.request, &self.next).await {
+            // Forward to the selected service
+            next_addr.call(HttpRequest {
+                request: msg.request,
+            }).await.unwrap_or_else(|_| {
+                Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(BoxBody::from("Service unavailable"))
+                    .unwrap()
+            })
+        } else {
+            // Endpoint decided to handle locally
+            // Note: This requires additional logic or a different endpoint design
+            // For now, return a default response or handle through endpoint
+            Response::builder()
+                .status(StatusCode::OK)
+                .body(BoxBody::from("Handled locally"))
+                .unwrap()
         }
-        
-        response
     }
 }
 ```
@@ -142,85 +155,116 @@ A tree-like service organization:
 ```
 Root HttpService (handles all requests)
 ├── endpoint: RouterEndpoint (routes based on path)
-└── next: Some(Address<HttpService>)
+└── next: [Address<HttpService>, Address<HttpService>]
     │
-    └── Middleware HttpService (adds logging)
-        ├── endpoint: LoggingEndpoint
-        └── next: Some(Address<HttpService>)
-            │
-            └── Handler HttpService (actual business logic)
-                ├── endpoint: BusinessLogicEndpoint
-                └── next: None (leaf node)
+    ├── API HttpService (handles /api/*)
+    │   ├── endpoint: ApiRouterEndpoint
+    │   └── next: [Address<HttpService>]
+    │       │
+    │       └── Handler HttpService (actual business logic)
+    │           ├── endpoint: BusinessLogicEndpoint
+    │           └── next: [] (leaf node)
+    │
+    └── Static HttpService (handles static files)
+        ├── endpoint: StaticFileEndpoint
+        └── next: [] (leaf node)
 ```
 
 ### Request Processing Patterns
 
 #### Pattern 1: Simple Forwarding
 
-The service forwards all requests to the next service:
+The endpoint forwards all requests to the first next service:
 
 ```rust
-async fn handle(&mut self, msg: HttpRequest, _ctx: &mut Context<Self>) -> Response {
-    if let Some(ref next_addr) = self.next {
-        next_addr.call(msg).await.unwrap_or_else(|_| {
-            Response::new(BoxBody::from("Service unavailable"))
-        })
-    } else {
-        self.endpoint.handle_http(msg.request).await
+pub struct ForwardingEndpoint;
+
+#[async_trait]
+impl Endpoint for ForwardingEndpoint {
+    async fn handle_http(
+        &self, 
+        _request: Request, 
+        next: &[Address<HttpService>]
+    ) -> Option<&Address<HttpService>> {
+        next.first()
     }
 }
 ```
 
-#### Pattern 2: Middleware Pattern
+#### Pattern 2: Path-Based Routing
 
-The service processes the request, then forwards, then processes the response:
-
-```rust
-async fn handle(&mut self, msg: HttpRequest, _ctx: &mut Context<Self>) -> Response {
-    // Pre-processing
-    let request = self.endpoint.handle_http(msg.request).await;
-    
-    // Forward to next service
-    if let Some(ref next_addr) = self.next {
-        let response = next_addr.call(HttpRequest { request }).await?;
-        // Post-processing on response
-        return response;
-    }
-    
-    request
-}
-```
-
-#### Pattern 3: Conditional Routing
-
-The service routes based on request properties:
+The endpoint routes based on request path:
 
 ```rust
-async fn handle(&mut self, msg: HttpRequest, _ctx: &mut Context<Self>) -> Response {
-    let path = msg.request.uri().path();
-    
-    if path.starts_with("/api/") {
-        // Forward to API service
-        if let Some(ref api_addr) = self.next {
-            return api_addr.call(msg).await?;
+pub struct PathRouterEndpoint;
+
+#[async_trait]
+impl Endpoint for PathRouterEndpoint {
+    async fn handle_http(
+        &self, 
+        request: Request, 
+        next: &[Address<HttpService>]
+    ) -> Option<&Address<HttpService>> {
+        let path = request.uri().path();
+        
+        if path.starts_with("/api/") {
+            // Forward to first service (API handler)
+            next.get(0)
+        } else if path.starts_with("/static/") {
+            // Forward to second service (static file handler)
+            next.get(1)
+        } else {
+            // Handle locally (return None)
+            None
         }
     }
-    
-    // Handle with own endpoint
-    self.endpoint.handle_http(msg.request).await
+}
+```
+
+#### Pattern 3: Method-Based Routing
+
+The endpoint routes based on HTTP method:
+
+```rust
+pub struct MethodRouterEndpoint;
+
+#[async_trait]
+impl Endpoint for MethodRouterEndpoint {
+    async fn handle_http(
+        &self, 
+        request: Request, 
+        next: &[Address<HttpService>]
+    ) -> Option<&Address<HttpService>> {
+        match *request.method() {
+            Method::GET => next.get(0),      // GET handler
+            Method::POST => next.get(1),     // POST handler
+            Method::PUT => next.get(2),      // PUT handler
+            _ => None,                       // Handle other methods locally
+        }
+    }
 }
 ```
 
 ## Design Decisions
 
-### Why Option<Address<HttpService>>?
+### Why Vec<Address<HttpService>>?
 
-Using `Option<Address<HttpService>>` enables flexible service composition:
+Using `Vec<Address<HttpService>>` enables flexible service composition:
 
-- **Optional Forwarding**: Services can be leaf nodes (None) or intermediate nodes (Some)
-- **Tree Structure**: Enables hierarchical organization of services
-- **Type Safety**: The address is type-safe and ensures only `HttpService` instances can be chained
-- **Flexibility**: Services can dynamically decide whether to forward based on runtime conditions
+- **Multiple Targets**: Services can forward to multiple potential targets
+- **Routing Flexibility**: Endpoint can choose which service to forward to based on request properties
+- **Tree Structure**: Enables hierarchical organization of services with multiple branches
+- **Type Safety**: The addresses are type-safe and ensure only `HttpService` instances can be chained
+- **Dynamic Selection**: Endpoint can dynamically select which service to forward to at runtime
+
+### Why Return Option<&Address<HttpService>>?
+
+Returning `Option<&Address<HttpService>>` from `handle_http` provides clear routing semantics:
+
+- **Explicit Routing**: Endpoint explicitly decides whether to forward (Some) or handle locally (None)
+- **Reference Safety**: Returns a reference to one of the addresses in the input slice, ensuring lifetime safety
+- **Clear Contract**: Makes the routing decision explicit and easy to understand
+- **Flexibility**: Allows endpoints to implement various routing strategies
 
 ### Why dyn Endpoint?
 
@@ -250,11 +294,13 @@ pub struct HelloEndpoint;
 
 #[async_trait]
 impl Endpoint for HelloEndpoint {
-    async fn handle_http(&self, request: Request) -> Response {
-        Response::builder()
-            .status(StatusCode::OK)
-            .body(BoxBody::from("Hello, World!"))
-            .unwrap()
+    async fn handle_http(
+        &self, 
+        _request: Request, 
+        _next: &[Address<HttpService>]
+    ) -> Option<&Address<HttpService>> {
+        // Handle locally, don't forward
+        None
     }
 }
 ```
@@ -265,7 +311,7 @@ impl Endpoint for HelloEndpoint {
 let endpoint = Box::new(HelloEndpoint);
 let service = HttpService {
     endpoint,
-    next: None,
+    next: Vec::new(), // No next services
 };
 
 let (addr, future) = service.start();
@@ -275,23 +321,32 @@ tokio::spawn(future);
 ### Chaining Services
 
 ```rust
-// Create inner service
-let inner_endpoint = Box::new(ApiEndpoint);
-let inner_service = HttpService {
-    endpoint: inner_endpoint,
-    next: None,
+// Create API service
+let api_endpoint = Box::new(ApiEndpoint);
+let api_service = HttpService {
+    endpoint: api_endpoint,
+    next: Vec::new(),
 };
-let (inner_addr, inner_future) = inner_service.start();
-tokio::spawn(inner_future);
+let (api_addr, api_future) = api_service.start();
+tokio::spawn(api_future);
 
-// Create outer service with forwarding
-let outer_endpoint = Box::new(RouterEndpoint);
-let outer_service = HttpService {
-    endpoint: outer_endpoint,
-    next: Some(inner_addr),
+// Create static file service
+let static_endpoint = Box::new(StaticFileEndpoint);
+let static_service = HttpService {
+    endpoint: static_endpoint,
+    next: Vec::new(),
 };
-let (outer_addr, outer_future) = outer_service.start();
-tokio::spawn(outer_future);
+let (static_addr, static_future) = static_service.start();
+tokio::spawn(static_future);
+
+// Create router service with multiple next services
+let router_endpoint = Box::new(PathRouterEndpoint);
+let router_service = HttpService {
+    endpoint: router_endpoint,
+    next: vec![api_addr, static_addr], // Multiple forwarding targets
+};
+let (router_addr, router_future) = router_service.start();
+tokio::spawn(router_future);
 ```
 
 ### Using the Service
@@ -326,11 +381,13 @@ HTTP requests are wrapped in message types:
 
 ## Future Considerations
 
-- **Multiple Next Services**: Consider supporting multiple next services for more complex routing
+- **Local Handling**: Consider how endpoints that return `None` should actually handle requests (may need additional endpoint method or different design)
+- **Response Generation**: Endpoints that handle locally need a way to generate responses (may require splitting routing and handling into separate methods)
 - **Service Discovery**: Mechanisms for discovering and connecting services dynamically
-- **Load Balancing**: Support for forwarding to multiple services with load balancing
+- **Load Balancing**: Support for forwarding to multiple services with load balancing (endpoint could select based on load)
 - **Circuit Breaker**: Built-in support for circuit breaker patterns
 - **Metrics**: Integration with metrics and observability systems
 - **Configuration**: Ways to configure service trees declaratively
 - **Error Handling**: Enhanced error handling and error response generation
 - **Request/Response Transformation**: Built-in support for transforming requests and responses between layers
+- **Multiple Forwarding**: Consider supporting forwarding to multiple services simultaneously (fan-out pattern)
