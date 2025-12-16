@@ -26,6 +26,9 @@ The `MethodEndpoint` filters requests by HTTP method, supporting multiple allowe
 use http::Method;
 use std::collections::HashSet;
 
+/// Type alias for HttpService with MethodEndpoint
+pub type MethodRoute = HttpService<MethodEndpoint>;
+
 pub struct MethodEndpoint {
     allowed_methods: HashSet<Method>,
 }
@@ -103,6 +106,120 @@ impl MethodEndpoint {
         self.allowed_methods.extend(methods);
         self
     }
+    
+    /// Create an HttpService with GET method filter wrapping the given endpoint
+    /// 
+    /// The endpoint is wrapped in an HttpService, started to obtain its address,
+    /// and the address is added to the next services of the MethodRoute.
+    /// 
+    /// Returns a tuple of (MethodRoute, inner_service_future) where the future
+    /// must be spawned for the inner service to run.
+    pub fn get<E: Endpoint>(endpoint: E) -> (MethodRoute, impl Future<Output = ()>)
+    where
+        E: 'static,
+    {
+        let inner_service = HttpService::new(endpoint);
+        let (inner_addr, inner_future) = inner_service.start();
+        let method_route = HttpService::new(Self::new().get())
+            .append_next(inner_addr.into());
+        (method_route, inner_future)
+    }
+    
+    /// Create an HttpService with POST method filter wrapping the given endpoint
+    pub fn post<E: Endpoint>(endpoint: E) -> (MethodRoute, impl Future<Output = ()>)
+    where
+        E: 'static,
+    {
+        let inner_service = HttpService::new(endpoint);
+        let (inner_addr, inner_future) = inner_service.start();
+        let method_route = HttpService::new(Self::new().post())
+            .append_next(inner_addr.into());
+        (method_route, inner_future)
+    }
+    
+    /// Create an HttpService with PUT method filter wrapping the given endpoint
+    pub fn put<E: Endpoint>(endpoint: E) -> (MethodRoute, impl Future<Output = ()>)
+    where
+        E: 'static,
+    {
+        let inner_service = HttpService::new(endpoint);
+        let (inner_addr, inner_future) = inner_service.start();
+        let method_route = HttpService::new(Self::new().put())
+            .append_next(inner_addr.into());
+        (method_route, inner_future)
+    }
+    
+    /// Create an HttpService with DELETE method filter wrapping the given endpoint
+    pub fn delete<E: Endpoint>(endpoint: E) -> (MethodRoute, impl Future<Output = ()>)
+    where
+        E: 'static,
+    {
+        let inner_service = HttpService::new(endpoint);
+        let (inner_addr, inner_future) = inner_service.start();
+        let method_route = HttpService::new(Self::new().delete())
+            .append_next(inner_addr.into());
+        (method_route, inner_future)
+    }
+    
+    /// Create an HttpService with PATCH method filter wrapping the given endpoint
+    pub fn patch<E: Endpoint>(endpoint: E) -> (MethodRoute, impl Future<Output = ()>)
+    where
+        E: 'static,
+    {
+        let inner_service = HttpService::new(endpoint);
+        let (inner_addr, inner_future) = inner_service.start();
+        let method_route = HttpService::new(Self::new().patch())
+            .append_next(inner_addr.into());
+        (method_route, inner_future)
+    }
+    
+    /// Create an HttpService with OPTIONS method filter wrapping the given endpoint
+    pub fn options<E: Endpoint>(endpoint: E) -> (MethodRoute, impl Future<Output = ()>)
+    where
+        E: 'static,
+    {
+        let inner_service = HttpService::new(endpoint);
+        let (inner_addr, inner_future) = inner_service.start();
+        let method_route = HttpService::new(Self::new().options())
+            .append_next(inner_addr.into());
+        (method_route, inner_future)
+    }
+    
+    /// Create an HttpService with HEAD method filter wrapping the given endpoint
+    pub fn head<E: Endpoint>(endpoint: E) -> (MethodRoute, impl Future<Output = ()>)
+    where
+        E: 'static,
+    {
+        let inner_service = HttpService::new(endpoint);
+        let (inner_addr, inner_future) = inner_service.start();
+        let method_route = HttpService::new(Self::new().head())
+            .append_next(inner_addr.into());
+        (method_route, inner_future)
+    }
+    
+    /// Create an HttpService with GET and POST method filters wrapping the given endpoint
+    pub fn get_or_post<E: Endpoint>(endpoint: E) -> (MethodRoute, impl Future<Output = ()>)
+    where
+        E: 'static,
+    {
+        let inner_service = HttpService::new(endpoint);
+        let (inner_addr, inner_future) = inner_service.start();
+        let method_route = HttpService::new(Self::new().get().post())
+            .append_next(inner_addr.into());
+        (method_route, inner_future)
+    }
+    
+    /// Create an HttpService with RESTful methods (GET, POST, PUT, DELETE) wrapping the given endpoint
+    pub fn restful<E: Endpoint>(endpoint: E) -> (MethodRoute, impl Future<Output = ()>)
+    where
+        E: 'static,
+    {
+        let inner_service = HttpService::new(endpoint);
+        let (inner_addr, inner_future) = inner_service.start();
+        let method_route = HttpService::new(Self::new().get().post().put().delete())
+            .append_next(inner_addr.into());
+        (method_route, inner_future)
+    }
 }
 
 impl Default for MethodEndpoint {
@@ -170,6 +287,9 @@ Key characteristics:
 - **Builder Pattern**: Uses a fluent builder API for adding methods
 - **Empty Initialization**: `new()` and `Default` create an empty endpoint with no allowed methods
 - **Method Addition**: Methods like `get()`, `post()`, `options()` add methods to the allowed set and return `Self` for chaining
+- **Convenience Constructors**: Static methods like `MethodEndpoint::get(endpoint)` create `HttpService<MethodEndpoint>` wrapping another endpoint, returning `(MethodRoute, impl Future)` tuple
+- **Type Alias**: `MethodRoute` is a type alias for `HttpService<MethodEndpoint>` for convenience
+- **Service Lifecycle**: Convenience constructors start the inner endpoint service and return its future, which must be spawned separately
 - **Multiple Methods Support**: Supports filtering for multiple HTTP methods simultaneously
 - **Set-Based Matching**: Uses `HashSet` for efficient O(1) method lookup
 - **Method Matching**: Checks if request method is in the allowed methods set
@@ -177,6 +297,36 @@ Key characteristics:
 - **Error Response**: Returns `405 Method Not Allowed` with `Allow` header listing all allowed methods (if any)
 - **Empty Set Handling**: If no methods are added, all requests will return `405 Method Not Allowed` without an `Allow` header
 - **Fluent API**: Methods return `Self` for method chaining, enabling readable code like `MethodEndpoint::new().get().post()`
+
+### Convenience Constructors
+
+`MethodEndpoint` provides static convenience methods that create `HttpService<MethodEndpoint>` instances wrapping another endpoint:
+
+- **Single Method Filters**: `get()`, `post()`, `put()`, `delete()`, `patch()`, `options()`, `head()` - Create a method filter for a single HTTP method
+- **Common Combinations**: `get_or_post()`, `restful()` - Create filters for common method combinations
+- **Type Safety**: All methods accept `impl Endpoint` and return `MethodRoute` (which is `HttpService<MethodEndpoint>`)
+- **Automatic Wrapping**: The provided endpoint is automatically wrapped in an `HttpService`, started, and its address is added to the `next` vector
+
+**Note on Service Lifecycle**: The convenience methods start the inner endpoint service to obtain its address. They return a tuple `(MethodRoute, impl Future<Output = ()>)` where the future must be spawned for the inner service to run.
+
+These convenience methods simplify the common pattern of wrapping an endpoint with a method filter:
+
+```rust
+// Instead of:
+let endpoint = MyEndpoint;
+let inner_service = HttpService::new(endpoint);
+let (inner_addr, inner_future) = inner_service.start();
+tokio::spawn(inner_future);
+let method_filter = MethodEndpoint::new().get();
+let service = HttpService::new(method_filter)
+    .append_next(inner_addr.into());
+
+// You can write:
+let (service, inner_future) = MethodEndpoint::get(MyEndpoint);
+tokio::spawn(inner_future);
+let (addr, service_future) = service.start();
+tokio::spawn(service_future);
+```
 
 ## Architecture
 
@@ -279,6 +429,42 @@ tokio::spawn(multi_future);
 
 // Using Default trait
 let default_endpoint = MethodEndpoint::default().get().post();
+```
+
+### Using Convenience Constructors
+
+```rust
+// Create a GET-only service using convenience constructor
+let handler = MyHandlerEndpoint;
+let (get_service, inner_future) = MethodEndpoint::get(handler);
+tokio::spawn(inner_future); // Spawn inner service future
+let (addr, service_future) = get_service.start();
+tokio::spawn(service_future); // Spawn method route service future
+
+// Create a POST-only service
+let (post_service, post_inner_future) = MethodEndpoint::post(MyHandlerEndpoint);
+tokio::spawn(post_inner_future);
+let (post_addr, post_service_future) = post_service.start();
+tokio::spawn(post_service_future);
+
+// Create a service that accepts both GET and POST
+let (get_or_post_service, gop_inner_future) = MethodEndpoint::get_or_post(MyHandlerEndpoint);
+tokio::spawn(gop_inner_future);
+let (gop_addr, gop_service_future) = get_or_post_service.start();
+tokio::spawn(gop_service_future);
+
+// Create a RESTful service (GET, POST, PUT, DELETE)
+let (restful_service, restful_inner_future) = MethodEndpoint::restful(MyHandlerEndpoint);
+tokio::spawn(restful_inner_future);
+let (restful_addr, restful_service_future) = restful_service.start();
+tokio::spawn(restful_service_future);
+
+// Convenience constructors work with any endpoint type
+let path_endpoint = PathEndpoint::new("api");
+let (api_get_service, api_get_inner_future) = MethodEndpoint::get(path_endpoint);
+tokio::spawn(api_get_inner_future);
+let (api_get_addr, api_get_service_future) = api_get_service.start();
+tokio::spawn(api_get_service_future);
 ```
 
 ### Multiple Methods Support
