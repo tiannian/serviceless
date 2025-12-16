@@ -49,51 +49,83 @@ pub struct MethodEndpoint {
 }
 
 impl MethodEndpoint {
-    /// Create a new MethodEndpoint that allows multiple HTTP methods
-    pub fn new(methods: impl IntoIterator<Item = Method>) -> Self {
+    /// Create a new empty MethodEndpoint with no allowed methods
+    pub fn new() -> Self {
         Self {
-            allowed_methods: methods.into_iter().collect(),
+            allowed_methods: HashSet::new(),
         }
     }
     
-    /// Create a MethodEndpoint for a single method (convenience)
-    pub fn single(method: Method) -> Self {
-        Self::new([method])
+    /// Add GET method to the allowed methods
+    pub fn get(mut self) -> Self {
+        self.allowed_methods.insert(Method::GET);
+        self
     }
     
-    /// Create a MethodEndpoint for GET requests
-    pub fn get() -> Self {
-        Self::single(Method::GET)
+    /// Add POST method to the allowed methods
+    pub fn post(mut self) -> Self {
+        self.allowed_methods.insert(Method::POST);
+        self
     }
     
-    /// Create a MethodEndpoint for POST requests
-    pub fn post() -> Self {
-        Self::single(Method::POST)
+    /// Add PUT method to the allowed methods
+    pub fn put(mut self) -> Self {
+        self.allowed_methods.insert(Method::PUT);
+        self
     }
     
-    /// Create a MethodEndpoint for PUT requests
-    pub fn put() -> Self {
-        Self::single(Method::PUT)
+    /// Add DELETE method to the allowed methods
+    pub fn delete(mut self) -> Self {
+        self.allowed_methods.insert(Method::DELETE);
+        self
     }
     
-    /// Create a MethodEndpoint for DELETE requests
-    pub fn delete() -> Self {
-        Self::single(Method::DELETE)
+    /// Add PATCH method to the allowed methods
+    pub fn patch(mut self) -> Self {
+        self.allowed_methods.insert(Method::PATCH);
+        self
     }
     
-    /// Create a MethodEndpoint for PATCH requests
-    pub fn patch() -> Self {
-        Self::single(Method::PATCH)
+    /// Add OPTIONS method to the allowed methods
+    pub fn options(mut self) -> Self {
+        self.allowed_methods.insert(Method::OPTIONS);
+        self
     }
     
-    /// Create a MethodEndpoint that allows both GET and POST
-    pub fn get_or_post() -> Self {
-        Self::new([Method::GET, Method::POST])
+    /// Add HEAD method to the allowed methods
+    pub fn head(mut self) -> Self {
+        self.allowed_methods.insert(Method::HEAD);
+        self
     }
     
-    /// Create a MethodEndpoint that allows GET, POST, PUT, and DELETE
-    pub fn restful() -> Self {
-        Self::new([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+    /// Add TRACE method to the allowed methods
+    pub fn trace(mut self) -> Self {
+        self.allowed_methods.insert(Method::TRACE);
+        self
+    }
+    
+    /// Add CONNECT method to the allowed methods
+    pub fn connect(mut self) -> Self {
+        self.allowed_methods.insert(Method::CONNECT);
+        self
+    }
+    
+    /// Add a custom method to the allowed methods
+    pub fn method(mut self, method: Method) -> Self {
+        self.allowed_methods.insert(method);
+        self
+    }
+    
+    /// Add multiple methods from an iterator
+    pub fn methods(mut self, methods: impl IntoIterator<Item = Method>) -> Self {
+        self.allowed_methods.extend(methods);
+        self
+    }
+}
+
+impl Default for MethodEndpoint {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -116,33 +148,53 @@ impl Endpoint for MethodEndpoint {
     
     async fn handle_leaf(&self, request: &Request) -> Response {
         // Build Allow header with all allowed methods
-        let allow_header = self.allowed_methods
-            .iter()
-            .map(|m| m.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
+        let allow_header = if self.allowed_methods.is_empty() {
+            String::new()
+        } else {
+            self.allowed_methods
+                .iter()
+                .map(|m| m.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
         
         // Return 405 Method Not Allowed for non-matching methods
-        Response::builder()
-            .status(StatusCode::METHOD_NOT_ALLOWED)
-            .header("Allow", &allow_header)
-            .body(BoxBody::from(format!(
+        let mut builder = Response::builder()
+            .status(StatusCode::METHOD_NOT_ALLOWED);
+        
+        // Only add Allow header if there are allowed methods
+        if !allow_header.is_empty() {
+            builder = builder.header("Allow", &allow_header);
+        }
+        
+        let body_message = if allow_header.is_empty() {
+            format!("Method {} not allowed. No methods are allowed.", request.method())
+        } else {
+            format!(
                 "Method {} not allowed. Allowed methods: {}",
                 request.method(),
                 allow_header
-            )))
+            )
+        };
+        
+        builder
+            .body(BoxBody::from(body_message))
             .unwrap()
     }
 }
 ```
 
 Key characteristics:
+- **Builder Pattern**: Uses a fluent builder API for adding methods
+- **Empty Initialization**: `new()` and `Default` create an empty endpoint with no allowed methods
+- **Method Addition**: Methods like `get()`, `post()`, `options()` add methods to the allowed set and return `Self` for chaining
 - **Multiple Methods Support**: Supports filtering for multiple HTTP methods simultaneously
 - **Set-Based Matching**: Uses `HashSet` for efficient O(1) method lookup
 - **Method Matching**: Checks if request method is in the allowed methods set
 - **Forwarding**: Forwards matching requests to the first service in `next`
-- **Error Response**: Returns `405 Method Not Allowed` with `Allow` header listing all allowed methods
-- **Convenience Constructors**: Provides helper methods for common HTTP methods (GET, POST, etc.) and common combinations
+- **Error Response**: Returns `405 Method Not Allowed` with `Allow` header listing all allowed methods (if any)
+- **Empty Set Handling**: If no methods are added, all requests will return `405 Method Not Allowed` without an `Allow` header
+- **Fluent API**: Methods return `Self` for method chaining, enabling readable code like `MethodEndpoint::new().get().post()`
 
 ### 2. PathEndpoint Implementation
 
@@ -251,7 +303,7 @@ Key characteristics:
 Filter endpoints are designed to be composed:
 
 ```
-HttpService (MethodEndpoint::get_or_post())
+HttpService (MethodEndpoint::new().get().post())
 └── next: [Address<HttpService>]
     └── HttpService (PathEndpoint::prefix("/api"))
         └── next: [Address<HttpService>]
@@ -259,7 +311,7 @@ HttpService (MethodEndpoint::get_or_post())
 ```
 
 In this example:
-1. `MethodEndpoint` filters for GET and POST requests
+1. `MethodEndpoint` filters for GET and POST requests (using builder pattern)
 2. `PathEndpoint` filters for paths starting with `/api`
 3. Only GET and POST requests to `/api/*` reach the business logic endpoint
 
@@ -297,10 +349,21 @@ Both filter endpoints forward to `next.first()`:
 `MethodEndpoint` uses `HashSet` to store allowed methods:
 
 - **Efficient Lookup**: O(1) average-case lookup time for method checking
-- **No Duplicates**: Automatically handles duplicate methods when constructing from iterators
-- **Flexible Construction**: Easy to build from iterators, arrays, or vectors
+- **No Duplicates**: Automatically handles duplicate methods when adding via builder methods
+- **Flexible Construction**: Easy to build from iterators, arrays, or vectors using `methods()`
 - **Standard Library**: Uses well-tested standard library types
 - **Scalability**: Performance remains constant regardless of the number of allowed methods
+
+### Why Use Builder Pattern Instead of Constructor Parameters?
+
+`MethodEndpoint` uses a builder pattern with methods like `get()`, `post()`, etc.:
+
+- **Fluent API**: Enables readable, chainable code: `MethodEndpoint::new().get().post()`
+- **Flexibility**: Easy to add or remove methods without creating new constructors
+- **Discoverability**: Method names clearly indicate which HTTP methods are being added
+- **Extensibility**: Easy to add new HTTP methods without breaking existing code
+- **Empty Initialization**: `new()` and `Default` allow starting with an empty set, useful for conditional method addition
+- **Consistency**: All method-adding methods follow the same pattern, making the API predictable
 
 ## Examples
 
@@ -308,7 +371,7 @@ Both filter endpoints forward to `next.first()`:
 
 ```rust
 // Create a service that only accepts GET requests (single method)
-let get_endpoint = MethodEndpoint::get();
+let get_endpoint = MethodEndpoint::new().get();
 let get_service = HttpService::new(get_endpoint)
     .append_next(handler_addr);
 
@@ -333,8 +396,11 @@ let post_request = Request::builder()
 let response = addr.call(HttpRequest { request: post_request }).await?;
 // Response is 405 Method Not Allowed with Allow: GET
 
-// Create a service that accepts multiple methods
-let multi_endpoint = MethodEndpoint::new([Method::GET, Method::POST, Method::PUT]);
+// Create a service that accepts multiple methods using builder pattern
+let multi_endpoint = MethodEndpoint::new()
+    .get()
+    .post()
+    .put();
 let multi_service = HttpService::new(multi_endpoint)
     .append_next(handler_addr);
 
@@ -343,6 +409,9 @@ tokio::spawn(multi_future);
 
 // GET, POST, and PUT requests will all be forwarded
 // DELETE request will return 405 with Allow: GET, POST, PUT
+
+// Using Default trait
+let default_endpoint = MethodEndpoint::default().get().post();
 ```
 
 ### Basic PathEndpoint Usage
@@ -388,7 +457,7 @@ let (path_addr, path_future) = path_filter.start();
 tokio::spawn(path_future);
 
 // Create method filter (wraps path filter) - allows GET and POST
-let method_filter = HttpService::new(MethodEndpoint::get_or_post())
+let method_filter = HttpService::new(MethodEndpoint::new().get().post())
     .append_next(path_addr.into());
 let (root_addr, root_future) = method_filter.start();
 tokio::spawn(root_future);
@@ -412,8 +481,8 @@ let response = root_addr.call(HttpRequest { request: post_request }).await?;
 ### Multiple Methods Support
 
 ```rust
-// Create endpoint that allows multiple methods using convenience constructor
-let endpoint = MethodEndpoint::get_or_post();
+// Create endpoint that allows multiple methods using builder pattern
+let endpoint = MethodEndpoint::new().get().post();
 let service = HttpService::new(endpoint)
     .append_next(handler_addr);
 
@@ -445,13 +514,12 @@ let put_request = Request::builder()
 let response = addr.call(HttpRequest { request: put_request }).await?;
 // Response is 405 Method Not Allowed with Allow: GET, POST
 
-// Create endpoint with custom method set
-let custom_endpoint = MethodEndpoint::new([
-    Method::GET,
-    Method::POST,
-    Method::PUT,
-    Method::DELETE,
-]);
+// Create endpoint with multiple methods using builder pattern
+let custom_endpoint = MethodEndpoint::new()
+    .get()
+    .post()
+    .put()
+    .delete();
 let custom_service = HttpService::new(custom_endpoint)
     .append_next(handler_addr);
 
@@ -459,6 +527,14 @@ let (custom_addr, custom_future) = custom_service.start();
 tokio::spawn(custom_future);
 
 // All four methods will be allowed
+
+// Using methods() to add from iterator
+let iter_endpoint = MethodEndpoint::new()
+    .methods([Method::GET, Method::POST, Method::PUT]);
+    
+// Using method() to add custom methods
+let custom_method = Method::from_bytes(b"CUSTOM").unwrap();
+let custom_endpoint = MethodEndpoint::new().method(custom_method);
 ```
 
 ### Exact Path Matching
