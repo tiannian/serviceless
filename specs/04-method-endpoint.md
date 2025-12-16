@@ -111,88 +111,88 @@ impl MethodEndpoint {
 /// Route module provides convenience functions for creating method-filtered routes
 pub mod route {
     use super::{MethodEndpoint, MethodRoute};
-    use crate::actor::{Address, HttpService};
+    use crate::actor::HttpService;
     use crate::endpoint::Endpoint;
     
-    /// Create an HttpService with GET method filter wrapping the given service address
-    pub fn get<E: Endpoint>(endpoint: Address<HttpService<E>>) -> MethodRoute 
+    /// Create an HttpService with GET method filter wrapping the given service
+    pub fn get<E: Endpoint>(service: &HttpService<E>) -> MethodRoute 
     where
         E: 'static,
     {
         HttpService::new(MethodEndpoint::new().get())
-            .append_next(endpoint.into())
+            .append_next(service.addr().clone().into())
     }
     
-    /// Create an HttpService with POST method filter wrapping the given service address
-    pub fn post<E: Endpoint>(endpoint: Address<HttpService<E>>) -> MethodRoute 
+    /// Create an HttpService with POST method filter wrapping the given service
+    pub fn post<E: Endpoint>(service: &HttpService<E>) -> MethodRoute 
     where
         E: 'static,
     {
         HttpService::new(MethodEndpoint::new().post())
-            .append_next(endpoint.into())
+            .append_next(service.addr().clone().into())
     }
     
-    /// Create an HttpService with PUT method filter wrapping the given service address
-    pub fn put<E: Endpoint>(endpoint: Address<HttpService<E>>) -> MethodRoute 
+    /// Create an HttpService with PUT method filter wrapping the given service
+    pub fn put<E: Endpoint>(service: &HttpService<E>) -> MethodRoute 
     where
         E: 'static,
     {
         HttpService::new(MethodEndpoint::new().put())
-            .append_next(endpoint.into())
+            .append_next(service.addr().clone().into())
     }
     
-    /// Create an HttpService with DELETE method filter wrapping the given service address
-    pub fn delete<E: Endpoint>(endpoint: Address<HttpService<E>>) -> MethodRoute 
+    /// Create an HttpService with DELETE method filter wrapping the given service
+    pub fn delete<E: Endpoint>(service: &HttpService<E>) -> MethodRoute 
     where
         E: 'static,
     {
         HttpService::new(MethodEndpoint::new().delete())
-            .append_next(endpoint.into())
+            .append_next(service.addr().clone().into())
     }
     
-    /// Create an HttpService with PATCH method filter wrapping the given service address
-    pub fn patch<E: Endpoint>(endpoint: Address<HttpService<E>>) -> MethodRoute 
+    /// Create an HttpService with PATCH method filter wrapping the given service
+    pub fn patch<E: Endpoint>(service: &HttpService<E>) -> MethodRoute 
     where
         E: 'static,
     {
         HttpService::new(MethodEndpoint::new().patch())
-            .append_next(endpoint.into())
+            .append_next(service.addr().clone().into())
     }
     
-    /// Create an HttpService with OPTIONS method filter wrapping the given service address
-    pub fn options<E: Endpoint>(endpoint: Address<HttpService<E>>) -> MethodRoute 
+    /// Create an HttpService with OPTIONS method filter wrapping the given service
+    pub fn options<E: Endpoint>(service: &HttpService<E>) -> MethodRoute 
     where
         E: 'static,
     {
         HttpService::new(MethodEndpoint::new().options())
-            .append_next(endpoint.into())
+            .append_next(service.addr().clone().into())
     }
     
-    /// Create an HttpService with HEAD method filter wrapping the given service address
-    pub fn head<E: Endpoint>(endpoint: Address<HttpService<E>>) -> MethodRoute 
+    /// Create an HttpService with HEAD method filter wrapping the given service
+    pub fn head<E: Endpoint>(service: &HttpService<E>) -> MethodRoute 
     where
         E: 'static,
     {
         HttpService::new(MethodEndpoint::new().head())
-            .append_next(endpoint.into())
+            .append_next(service.addr().clone().into())
     }
     
-    /// Create an HttpService with GET and POST method filters wrapping the given service address
-    pub fn get_or_post<E: Endpoint>(endpoint: Address<HttpService<E>>) -> MethodRoute 
+    /// Create an HttpService with GET and POST method filters wrapping the given service
+    pub fn get_or_post<E: Endpoint>(service: &HttpService<E>) -> MethodRoute 
     where
         E: 'static,
     {
         HttpService::new(MethodEndpoint::new().get().post())
-            .append_next(endpoint.into())
+            .append_next(service.addr().clone().into())
     }
     
-    /// Create an HttpService with RESTful methods (GET, POST, PUT, DELETE) wrapping the given service address
-    pub fn restful<E: Endpoint>(endpoint: Address<HttpService<E>>) -> MethodRoute 
+    /// Create an HttpService with RESTful methods (GET, POST, PUT, DELETE) wrapping the given service
+    pub fn restful<E: Endpoint>(service: &HttpService<E>) -> MethodRoute 
     where
         E: 'static,
     {
         HttpService::new(MethodEndpoint::new().get().post().put().delete())
-            .append_next(endpoint.into())
+            .append_next(service.addr().clone().into())
     }
 }
 
@@ -272,14 +272,14 @@ Key characteristics:
 
 ### Route Module
 
-The `route` module provides convenience functions for creating method-filtered routes that wrap existing service addresses:
+The `route` module provides convenience functions for creating method-filtered routes that wrap existing services:
 
 - **Single Method Filters**: `route::get()`, `route::post()`, `route::put()`, `route::delete()`, `route::patch()`, `route::options()`, `route::head()` - Create a method filter for a single HTTP method
 - **Common Combinations**: `route::get_or_post()`, `route::restful()` - Create filters for common method combinations
-- **Type Safety**: All functions accept `Address<HttpService<E>>` and return `MethodRoute` (which is `HttpService<MethodEndpoint>`)
-- **Service Address**: The provided service address is added to the `next` vector of the created `MethodRoute`
+- **Type Safety**: All functions accept `&HttpService<E>` and return `MethodRoute` (which is `HttpService<MethodEndpoint>`)
+- **Service Reference**: The provided service's address (obtained via `addr()`) is added to the `next` vector of the created `MethodRoute`
 
-These convenience functions simplify the common pattern of wrapping a service address with a method filter:
+These convenience functions simplify the common pattern of wrapping a service with a method filter:
 
 ```rust
 // Instead of:
@@ -292,11 +292,13 @@ let service = HttpService::new(method_filter)
 
 // You can write:
 let handler = HttpService::new(MyEndpoint);
-let (handler_addr, handler_future) = handler.start();
-tokio::spawn(handler_future);
-let service = route::get(handler_addr);
+// Use the service reference directly - addr() is available after creation
+let service = route::get(&handler);
 let (addr, future) = service.start();
 tokio::spawn(future);
+// Start the handler service
+let (handler_addr, handler_future) = handler.start();
+tokio::spawn(handler_future);
 ```
 
 ## Architecture
@@ -407,38 +409,41 @@ let default_endpoint = MethodEndpoint::default().get().post();
 ```rust
 use MethodEndpoint::route;
 
-// Create handler service first
+// Create handler service
 let handler = HttpService::new(MyHandlerEndpoint);
-let (handler_addr, handler_future) = handler.start();
-tokio::spawn(handler_future);
 
 // Create a GET-only service using convenience function
-let get_service = route::get(handler_addr.clone());
+// The service's addr() method is used internally
+let get_service = route::get(&handler);
 let (addr, future) = get_service.start();
 tokio::spawn(future);
 
+// Start the handler service
+let (handler_addr, handler_future) = handler.start();
+tokio::spawn(handler_future);
+
 // Create a POST-only service
-let post_service = route::post(handler_addr.clone());
+let post_service = route::post(&handler);
 let (post_addr, post_future) = post_service.start();
 tokio::spawn(post_future);
 
 // Create a service that accepts both GET and POST
-let get_or_post_service = route::get_or_post(handler_addr.clone());
+let get_or_post_service = route::get_or_post(&handler);
 let (gop_addr, gop_future) = get_or_post_service.start();
 tokio::spawn(gop_future);
 
 // Create a RESTful service (GET, POST, PUT, DELETE)
-let restful_service = route::restful(handler_addr.clone());
+let restful_service = route::restful(&handler);
 let (restful_addr, restful_future) = restful_service.start();
 tokio::spawn(restful_future);
 
-// Convenience functions work with any service address
+// Convenience functions work with any service reference
 let path_service = HttpService::new(PathEndpoint::new("api"));
-let (path_addr, path_future) = path_service.start();
-tokio::spawn(path_future);
-let api_get_service = route::get(path_addr);
+let api_get_service = route::get(&path_service);
 let (api_get_addr, api_get_future) = api_get_service.start();
 tokio::spawn(api_get_future);
+let (path_addr, path_future) = path_service.start();
+tokio::spawn(path_future);
 ```
 
 ### Multiple Methods Support

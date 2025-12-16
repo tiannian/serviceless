@@ -145,6 +145,23 @@ impl<E: Endpoint> HttpService<E> {
     pub fn endpoint_mut(&mut self) -> &mut E {
         &mut self.endpoint
     }
+    
+    /// Get the address of this service
+    /// 
+    /// This method returns a reference to the service's address, which can be used
+    /// for routing and forwarding requests. The address is typically available after
+    /// the service is created, allowing it to be used in route composition before
+    /// the service is started.
+    /// 
+    /// The address is stored in the service struct and can be accessed via this method.
+    /// This enables convenient composition patterns where services can reference each
+    /// other's addresses without needing to start them first.
+    pub fn addr(&self) -> &Address<HttpService<E>> {
+        // Implementation would return a reference to the service's address
+        // The address should be stored in the HttpService struct, possibly as an
+        // Option<Address<HttpService<E>>> that gets set during construction or
+        // initialization. The exact mechanism depends on the actor system implementation.
+    }
 }
 ```
 
