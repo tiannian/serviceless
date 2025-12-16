@@ -54,25 +54,29 @@ Key characteristics:
 - **Reference Return**: Returns a reference to one of the addresses in the `next` slice
 - **Handle Leaf Method**: Processes requests locally when routing returns `None`
 - **Separation of Concerns**: Routing logic is separated from request handling logic
-- **Trait Object**: Can be used as `dyn Endpoint` for dynamic dispatch
+- **Generic Usage**: Used as a trait bound in `HttpService<E: Endpoint>` for zero-cost abstraction
+- **Trait Object Support**: Can also be used as `dyn Endpoint` when type erasure is needed for heterogeneous service trees
 
 ### 2. HttpService Structure
 
 The `HttpService` combines an endpoint with multiple forwarding targets:
 
 ```rust
-pub struct HttpService {
-    endpoint: Box<dyn Endpoint>,
-    next: Vec<Address<HttpService>>,
+pub struct HttpService<E: Endpoint> {
+    endpoint: E,
+    next: Vec<Address<HttpService<dyn Endpoint>>>,
 }
 ```
 
 Key characteristics:
-- **Endpoint**: The primary request handler and router
+- **Generic Endpoint**: The endpoint is a generic type parameter `E: Endpoint`, avoiding dynamic dispatch overhead
+- **Type Safety**: Compile-time type checking ensures the endpoint implements the `Endpoint` trait
+- **Zero-Cost Abstraction**: No runtime overhead from trait objects when using concrete types
 - **Next Services**: Vector of addresses to other `HttpService` instances for forwarding
 - **Tree Organization**: The vector enables hierarchical service structures with multiple branches
 - **Composability**: Services can be nested and composed in various ways
 - **Multiple Targets**: Supports forwarding to multiple potential services, with the endpoint deciding which one
+- **Type Erasure for Next**: The `next` field uses `Address<HttpService<dyn Endpoint>>` to allow forwarding to services with different endpoint types
 
 ### 3. Tree-Like Organization
 
@@ -108,7 +112,7 @@ The request flow through the service tree:
 
 ```rust
 #[async_trait]
-impl Service for HttpService {
+impl<E: Endpoint> Service for HttpService<E> {
     async fn started(&mut self, _ctx: &mut Context<Self>) {
         // Initialization logic
     }
@@ -124,7 +128,7 @@ impl Message for HttpRequest {
 }
 
 #[async_trait]
-impl Handler<HttpRequest> for HttpService {
+impl<E: Endpoint> Handler<HttpRequest> for HttpService<E> {
     async fn handle(
         &mut self,
         msg: HttpRequest,
@@ -301,14 +305,29 @@ Separating routing and handling into two methods provides several benefits:
 - **Testability**: Routing and handling can be tested independently
 - **Composability**: Different routing strategies can be combined with different handling strategies
 
-### Why dyn Endpoint?
+### Why Generic Endpoint Instead of dyn Endpoint?
 
-Using `dyn Endpoint` provides flexibility:
+Using a generic type parameter `E: Endpoint` instead of `Box<dyn Endpoint>` provides several advantages:
 
-- **Dynamic Dispatch**: Different endpoint implementations can be used without changing the service structure
-- **Composability**: Endpoints can be swapped and composed easily
-- **Simplicity**: Avoids complex generic type parameters
-- **Runtime Flexibility**: Endpoint behavior can be determined at runtime
+- **Zero-Cost Abstraction**: No runtime overhead from dynamic dispatch when using concrete types
+- **Compile-Time Optimization**: The compiler can inline and optimize endpoint methods
+- **Type Safety**: Stronger type checking at compile time
+- **Performance**: Direct method calls instead of virtual function calls through trait objects
+- **Flexibility**: Still allows using trait objects in `next` field for heterogeneous service trees
+- **Composability**: Endpoints can be composed at compile time with full type information
+
+However, the `next` field uses `Address<HttpService<dyn Endpoint>>` to allow forwarding to services with different endpoint types, providing runtime flexibility for service composition.
+
+### Type Conversion for Heterogeneous Services
+
+When building service trees with different endpoint types, services need to be converted to `HttpService<dyn Endpoint>`:
+
+- **Type Erasure**: Concrete `HttpService<E>` instances can be converted to `HttpService<dyn Endpoint>` for storage in the `next` vector
+- **Runtime Flexibility**: Allows composing services with different endpoint implementations at runtime
+- **Performance Trade-off**: The conversion to trait objects introduces dynamic dispatch for the endpoint methods, but only for services in the `next` vector
+- **Homogeneous Trees**: If all services use the same endpoint type, no conversion is needed and full compile-time optimization is preserved
+
+The exact mechanism for type conversion (e.g., `Into` trait, helper methods, or explicit casting) will be determined during implementation.
 
 ### Tree Structure Benefits
 
@@ -350,7 +369,7 @@ impl Endpoint for HelloEndpoint {
 ### Creating an HttpService
 
 ```rust
-let endpoint = Box::new(HelloEndpoint);
+let endpoint = HelloEndpoint;
 let service = HttpService {
     endpoint,
     next: Vec::new(), // No next services
@@ -362,10 +381,12 @@ tokio::spawn(future);
 
 ### Chaining Services
 
+When chaining services with different endpoint types, they need to be converted to `HttpService<dyn Endpoint>` to be stored in the `next` vector:
+
 ```rust
 // Create API service
-let api_endpoint = Box::new(ApiEndpoint);
-let api_service = HttpService {
+let api_endpoint = ApiEndpoint;
+let api_service: HttpService<ApiEndpoint> = HttpService {
     endpoint: api_endpoint,
     next: Vec::new(),
 };
@@ -373,8 +394,8 @@ let (api_addr, api_future) = api_service.start();
 tokio::spawn(api_future);
 
 // Create static file service
-let static_endpoint = Box::new(StaticFileEndpoint);
-let static_service = HttpService {
+let static_endpoint = StaticFileEndpoint;
+let static_service: HttpService<StaticFileEndpoint> = HttpService {
     endpoint: static_endpoint,
     next: Vec::new(),
 };
@@ -382,10 +403,47 @@ let (static_addr, static_future) = static_service.start();
 tokio::spawn(static_future);
 
 // Create router service with multiple next services
-let router_endpoint = Box::new(PathRouterEndpoint);
+// Note: The router service can use a concrete endpoint type
+let router_endpoint = PathRouterEndpoint;
+let router_service: HttpService<PathRouterEndpoint> = HttpService {
+    endpoint: router_endpoint,
+    // Convert addresses to HttpService<dyn Endpoint> for heterogeneous composition
+    // Note: The exact conversion mechanism (e.g., Into trait, helper methods) 
+    // will be determined during implementation
+    next: vec![
+        api_addr.into(),  // Convert Address<HttpService<ApiEndpoint>> to Address<HttpService<dyn Endpoint>>
+        static_addr.into(), // Convert Address<HttpService<StaticFileEndpoint>> to Address<HttpService<dyn Endpoint>>
+    ],
+};
+let (router_addr, router_future) = router_service.start();
+tokio::spawn(router_future);
+```
+
+Alternatively, if all services use the same endpoint type, no conversion is needed:
+
+```rust
+// All services use the same endpoint type
+let router_endpoint = PathRouterEndpoint;
+let api_endpoint = PathRouterEndpoint; // Same type
+let static_endpoint = PathRouterEndpoint; // Same type
+
+let api_service = HttpService {
+    endpoint: api_endpoint,
+    next: Vec::new(),
+};
+let (api_addr, api_future) = api_service.start();
+tokio::spawn(api_future);
+
+let static_service = HttpService {
+    endpoint: static_endpoint,
+    next: Vec::new(),
+};
+let (static_addr, static_future) = static_service.start();
+tokio::spawn(static_future);
+
 let router_service = HttpService {
     endpoint: router_endpoint,
-    next: vec![api_addr, static_addr], // Multiple forwarding targets
+    next: vec![api_addr, static_addr], // Same type, no conversion needed
 };
 let (router_addr, router_future) = router_service.start();
 tokio::spawn(router_future);
