@@ -8,11 +8,12 @@ The Endpoint design provides a flexible, composable HTTP request handling mechan
 
 ### Endpoint Trait
 
-The `Endpoint` trait defines a contract for handling HTTP requests:
+The `Endpoint` trait defines a contract for routing and handling HTTP requests:
 
-- **Purpose**: Provides a uniform interface for processing HTTP requests
-- **Method**: `handle_http()` receives a `Request` and a slice of `Address<HttpService>` references, returns an optional reference to an `Address<HttpService>`
-- **Routing Decision**: Returns `Some(&Address)` to forward the request to that service, or `None` to handle the request itself
+- **Purpose**: Provides a uniform interface for routing and processing HTTP requests
+- **Route Method**: `route()` receives a `Request` and a slice of `Address<HttpService>` references, returns an optional reference to an `Address<HttpService>`
+- **Handle Leaf Method**: `handle_leaf()` receives a `Request` and returns a `Response` for handling requests locally
+- **Routing Decision**: `route()` returns `Some(&Address)` to forward the request to that service, or `None` to handle the request locally via `handle_leaf()`
 - **Flexibility**: Allows different implementations to handle requests in various ways
 - **Composability**: Endpoints can be composed and chained together
 
@@ -29,25 +30,30 @@ The `HttpService` is a service that wraps an `Endpoint` and can forward requests
 
 ### 1. Endpoint Trait
 
-The `Endpoint` trait provides a routing interface that can select which service to forward to:
+The `Endpoint` trait provides both routing and handling capabilities:
 
 ```rust
 #[async_trait]
 pub trait Endpoint: Send + Sync + 'static {
-    async fn handle_http(
+    /// Route the request to one of the next services, or return None to handle locally
+    async fn route(
         &self, 
         request: Request, 
         next: &[Address<HttpService>]
     ) -> Option<&Address<HttpService>>;
+    
+    /// Handle the request locally when route() returns None
+    async fn handle_leaf(&self, request: Request) -> Response;
 }
 ```
 
 Key characteristics:
 - **Async Processing**: All request handling is asynchronous
-- **Request Parameter**: Receives the HTTP request to process
-- **Next Services**: Receives a slice of addresses to potential next services
+- **Route Method**: Receives the HTTP request and a slice of addresses to potential next services
 - **Routing Decision**: Returns `Some(&Address)` to forward to that service, or `None` to handle locally
 - **Reference Return**: Returns a reference to one of the addresses in the `next` slice
+- **Handle Leaf Method**: Processes requests locally when routing returns `None`
+- **Separation of Concerns**: Routing logic is separated from request handling logic
 - **Trait Object**: Can be used as `dyn Endpoint` for dynamic dispatch
 
 ### 2. HttpService Structure
@@ -86,11 +92,11 @@ The request flow through the service tree:
 
 1. HTTP request arrives at the root `HttpService` via `Address<HttpService>`
 2. Root service receives the request through its message handler
-3. Root service calls `endpoint.handle_http(request, &next)`:
+3. Root service calls `endpoint.route(request, &next)`:
    - Endpoint receives the request and the slice of next service addresses
    - Endpoint returns `Some(&Address)` to forward, or `None` to handle locally
 4. If endpoint returns `Some(&Address)`, the request is forwarded to that service
-5. If endpoint returns `None`, the service handles the request itself (may need additional logic)
+5. If endpoint returns `None`, the service calls `endpoint.handle_leaf(request)` to process the request locally
 6. Inner services follow the same pattern recursively
 7. Response flows back through the service chain
 
@@ -125,7 +131,7 @@ impl Handler<HttpRequest> for HttpService {
         _ctx: &mut Context<Self>,
     ) -> Response {
         // Call endpoint to decide routing
-        if let Some(next_addr) = self.endpoint.handle_http(msg.request, &self.next).await {
+        if let Some(next_addr) = self.endpoint.route(msg.request, &self.next).await {
             // Forward to the selected service
             next_addr.call(HttpRequest {
                 request: msg.request,
@@ -136,13 +142,8 @@ impl Handler<HttpRequest> for HttpService {
                     .unwrap()
             })
         } else {
-            // Endpoint decided to handle locally
-            // Note: This requires additional logic or a different endpoint design
-            // For now, return a default response or handle through endpoint
-            Response::builder()
-                .status(StatusCode::OK)
-                .body(BoxBody::from("Handled locally"))
-                .unwrap()
+            // Endpoint decided to handle locally, call handle_leaf
+            self.endpoint.handle_leaf(msg.request).await
         }
     }
 }
@@ -181,12 +182,20 @@ pub struct ForwardingEndpoint;
 
 #[async_trait]
 impl Endpoint for ForwardingEndpoint {
-    async fn handle_http(
+    async fn route(
         &self, 
         _request: Request, 
         next: &[Address<HttpService>]
     ) -> Option<&Address<HttpService>> {
         next.first()
+    }
+    
+    async fn handle_leaf(&self, _request: Request) -> Response {
+        // This should never be called if route always returns Some
+        Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(BoxBody::from("No handler available"))
+            .unwrap()
     }
 }
 ```
@@ -200,7 +209,7 @@ pub struct PathRouterEndpoint;
 
 #[async_trait]
 impl Endpoint for PathRouterEndpoint {
-    async fn handle_http(
+    async fn route(
         &self, 
         request: Request, 
         next: &[Address<HttpService>]
@@ -218,6 +227,14 @@ impl Endpoint for PathRouterEndpoint {
             None
         }
     }
+    
+    async fn handle_leaf(&self, request: Request) -> Response {
+        // Handle requests that don't match any route
+        Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(BoxBody::from(format!("Path not found: {}", request.uri().path())))
+            .unwrap()
+    }
 }
 ```
 
@@ -230,7 +247,7 @@ pub struct MethodRouterEndpoint;
 
 #[async_trait]
 impl Endpoint for MethodRouterEndpoint {
-    async fn handle_http(
+    async fn route(
         &self, 
         request: Request, 
         next: &[Address<HttpService>]
@@ -241,6 +258,14 @@ impl Endpoint for MethodRouterEndpoint {
             Method::PUT => next.get(2),      // PUT handler
             _ => None,                       // Handle other methods locally
         }
+    }
+    
+    async fn handle_leaf(&self, request: Request) -> Response {
+        // Handle unsupported methods
+        Response::builder()
+            .status(StatusCode::METHOD_NOT_ALLOWED)
+            .body(BoxBody::from(format!("Method {} not allowed", request.method())))
+            .unwrap()
     }
 }
 ```
@@ -259,12 +284,22 @@ Using `Vec<Address<HttpService>>` enables flexible service composition:
 
 ### Why Return Option<&Address<HttpService>>?
 
-Returning `Option<&Address<HttpService>>` from `handle_http` provides clear routing semantics:
+Returning `Option<&Address<HttpService>>` from `route` provides clear routing semantics:
 
 - **Explicit Routing**: Endpoint explicitly decides whether to forward (Some) or handle locally (None)
 - **Reference Safety**: Returns a reference to one of the addresses in the input slice, ensuring lifetime safety
 - **Clear Contract**: Makes the routing decision explicit and easy to understand
 - **Flexibility**: Allows endpoints to implement various routing strategies
+
+### Why Separate route() and handle_leaf()?
+
+Separating routing and handling into two methods provides several benefits:
+
+- **Separation of Concerns**: Routing logic is separate from request processing logic
+- **Clear Semantics**: When `route()` returns `None`, it's clear that `handle_leaf()` will be called
+- **Flexibility**: Endpoints can implement complex routing without mixing it with handling logic
+- **Testability**: Routing and handling can be tested independently
+- **Composability**: Different routing strategies can be combined with different handling strategies
 
 ### Why dyn Endpoint?
 
@@ -294,13 +329,20 @@ pub struct HelloEndpoint;
 
 #[async_trait]
 impl Endpoint for HelloEndpoint {
-    async fn handle_http(
+    async fn route(
         &self, 
         _request: Request, 
         _next: &[Address<HttpService>]
     ) -> Option<&Address<HttpService>> {
         // Handle locally, don't forward
         None
+    }
+    
+    async fn handle_leaf(&self, _request: Request) -> Response {
+        Response::builder()
+            .status(StatusCode::OK)
+            .body(BoxBody::from("Hello, World!"))
+            .unwrap()
     }
 }
 ```
@@ -381,8 +423,6 @@ HTTP requests are wrapped in message types:
 
 ## Future Considerations
 
-- **Local Handling**: Consider how endpoints that return `None` should actually handle requests (may need additional endpoint method or different design)
-- **Response Generation**: Endpoints that handle locally need a way to generate responses (may require splitting routing and handling into separate methods)
 - **Service Discovery**: Mechanisms for discovering and connecting services dynamically
 - **Load Balancing**: Support for forwarding to multiple services with load balancing (endpoint could select based on load)
 - **Circuit Breaker**: Built-in support for circuit breaker patterns
@@ -391,3 +431,4 @@ HTTP requests are wrapped in message types:
 - **Error Handling**: Enhanced error handling and error response generation
 - **Request/Response Transformation**: Built-in support for transforming requests and responses between layers
 - **Multiple Forwarding**: Consider supporting forwarding to multiple services simultaneously (fan-out pattern)
+- **Middleware Pattern**: Consider adding middleware support that can process requests/responses before and after forwarding
