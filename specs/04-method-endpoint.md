@@ -278,6 +278,7 @@ The `route` module provides convenience functions for creating method-filtered r
 - **Common Combinations**: `route::get_or_post()`, `route::restful()` - Create filters for common method combinations
 - **Type Safety**: All functions accept `&HttpService<E>` and return `MethodRoute` (which is `HttpService<MethodEndpoint>`)
 - **Service Reference**: The provided service's address (obtained via `addr()`) is added to the `next` vector of the created `MethodRoute`
+- **Service Must Be Started**: The service must be started before calling route module functions, as `addr()` requires the service to have been started (so that `self_addr` is set in the `started()` hook)
 
 These convenience functions simplify the common pattern of wrapping a service with a method filter:
 
@@ -292,14 +293,16 @@ let service = HttpService::new(method_filter)
 
 // You can write:
 let handler = HttpService::new(MyEndpoint);
-// Use the service reference directly - addr() is available after creation
+// Start the handler service first so addr() is available
+let (handler_addr, handler_future) = handler.start();
+tokio::spawn(handler_future);
+// Now use the service reference - addr() is available after started()
 let service = route::get(&handler);
 let (addr, future) = service.start();
 tokio::spawn(future);
-// Start the handler service
-let (handler_addr, handler_future) = handler.start();
-tokio::spawn(handler_future);
 ```
+
+**Note**: The service must be started before calling route module functions, as `addr()` requires the service to have been started (so that `self_addr` is set in the `started()` hook).
 
 ## Architecture
 
@@ -412,15 +415,15 @@ use MethodEndpoint::route;
 // Create handler service
 let handler = HttpService::new(MyHandlerEndpoint);
 
+// Start the handler service first so addr() is available
+let (handler_addr, handler_future) = handler.start();
+tokio::spawn(handler_future);
+
 // Create a GET-only service using convenience function
-// The service's addr() method is used internally
+// The service's addr() method is used internally (requires service to be started)
 let get_service = route::get(&handler);
 let (addr, future) = get_service.start();
 tokio::spawn(future);
-
-// Start the handler service
-let (handler_addr, handler_future) = handler.start();
-tokio::spawn(handler_future);
 
 // Create a POST-only service
 let post_service = route::post(&handler);
@@ -437,13 +440,13 @@ let restful_service = route::restful(&handler);
 let (restful_addr, restful_future) = restful_service.start();
 tokio::spawn(restful_future);
 
-// Convenience functions work with any service reference
+// Convenience functions work with any service reference (after it's started)
 let path_service = HttpService::new(PathEndpoint::new("api"));
+let (path_addr, path_future) = path_service.start();
+tokio::spawn(path_future);
 let api_get_service = route::get(&path_service);
 let (api_get_addr, api_get_future) = api_get_service.start();
 tokio::spawn(api_get_future);
-let (path_addr, path_future) = path_service.start();
-tokio::spawn(path_future);
 ```
 
 ### Multiple Methods Support

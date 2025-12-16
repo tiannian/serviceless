@@ -65,6 +65,7 @@ The `HttpService` combines an endpoint with multiple forwarding targets:
 pub struct HttpService<E: Endpoint> {
     endpoint: E,
     next: Vec<Address<HttpService<dyn Endpoint>>>,
+    self_addr: Option<Address<HttpService<E>>>,
 }
 ```
 
@@ -73,6 +74,7 @@ Key characteristics:
 - **Type Safety**: Compile-time type checking ensures the endpoint implements the `Endpoint` trait
 - **Zero-Cost Abstraction**: No runtime overhead from trait objects when using concrete types
 - **Next Services**: Vector of addresses to other `HttpService` instances for forwarding
+- **Self Address**: Stores the service's own address, obtained from `Context` during `started()` hook
 - **Tree Organization**: The vector enables hierarchical service structures with multiple branches
 - **Composability**: Services can be nested and composed in various ways
 - **Multiple Targets**: Supports forwarding to multiple potential services, with the endpoint deciding which one
@@ -91,6 +93,7 @@ impl<E: Endpoint> HttpService<E> {
         Self {
             endpoint,
             next: Vec::new(),
+            self_addr: None,
         }
     }
     
@@ -99,6 +102,7 @@ impl<E: Endpoint> HttpService<E> {
         Self {
             endpoint,
             next,
+            self_addr: None,
         }
     }
 }
@@ -149,18 +153,16 @@ impl<E: Endpoint> HttpService<E> {
     /// Get the address of this service
     /// 
     /// This method returns a reference to the service's address, which can be used
-    /// for routing and forwarding requests. The address is typically available after
-    /// the service is created, allowing it to be used in route composition before
-    /// the service is started.
+    /// for routing and forwarding requests. The address is set during the `started()`
+    /// hook when the service starts, using `ctx.addr()` from the `Context`.
     /// 
-    /// The address is stored in the service struct and can be accessed via this method.
-    /// This enables convenient composition patterns where services can reference each
-    /// other's addresses without needing to start them first.
+    /// # Panics
+    /// 
+    /// This method will panic if called before the service has been started, as
+    /// `self_addr` will be `None`. The address is only available after `started()`
+    /// has been called.
     pub fn addr(&self) -> &Address<HttpService<E>> {
-        // Implementation would return a reference to the service's address
-        // The address should be stored in the HttpService struct, possibly as an
-        // Option<Address<HttpService<E>>> that gets set during construction or
-        // initialization. The exact mechanism depends on the actor system implementation.
+        self.self_addr.as_ref().expect("Service address not set. Service must be started first.")
     }
 }
 ```
@@ -236,8 +238,10 @@ The request flow through the service tree:
 ```rust
 #[async_trait]
 impl<E: Endpoint> Service for HttpService<E> {
-    async fn started(&mut self, _ctx: &mut Context<Self>) {
-        // Initialization logic
+    async fn started(&mut self, ctx: &mut Context<Self>) {
+        // Store the service's own address obtained from Context
+        self.self_addr = Some(ctx.addr());
+        // Additional initialization logic can be added here
     }
 }
 
