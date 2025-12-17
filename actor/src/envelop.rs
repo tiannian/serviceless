@@ -75,9 +75,7 @@ where
         if let (Some(message), Some(rc)) = (message, result_channel) {
             let res = <S as Handler<M>>::handler(svc, message, ctx).await;
 
-            if ctx.paused {
-                log::info!("Call a closed service");
-            } else if rc.send(res).is_err() {
+            if rc.send(res).is_err() {
                 log::warn!("Channel Closed");
             }
         }

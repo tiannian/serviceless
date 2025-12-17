@@ -48,11 +48,11 @@ svc.start();
 > Note: this function must call in async function or after async runtime initialized.
 > If not, it will panic.
 
-#### Stop and Pause
+#### Stop
 
-When a service started, we can call stop and pause method on `context`.
+When a service started, we can call stop method on `context`.
 
-You can call these function in Service Hook or in Handler.
+You can call this function in Service Hook or in Handler.
 
 ### Handler and Mesaage
 
@@ -101,8 +101,6 @@ The address can make call or send.
 - Call means caller want to known the result.
   1. This is an async function
   2. When an service stop, caller will get `ServiceStopped` from Error.
-  3. When an service pause, caller will get `ServicePaused` from Error.
 - Send means caller don't care the result, so
   1. This is an plain function
   2. When an service stop, caller will get `ServiceStopped` from Error.
-  3. Caller can't known service paused

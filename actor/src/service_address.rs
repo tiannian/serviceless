@@ -48,13 +48,12 @@ where
             .unbounded_send(env)
             .map_err(|_| Error::ServiceStoped)?;
 
-        receiver.await.map_err(|_| Error::ServicePaused)
+        receiver.await.map_err(|_| Error::ServiceStoped)
     }
 
     /// Call service's handler without result
     ///
     /// Beacuse this function don't need result, so it can call without async.
-    /// If service paused, we have no ServicePaused return.
     pub fn send<M>(&self, message: M) -> Result<()>
     where
         M: Message + Send + 'static,
