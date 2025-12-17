@@ -43,14 +43,41 @@ impl Handler<U16> for Service0 {
 async fn main() {
     let srv = Service0::default();
 
-    let (addr, future) = srv.start();
+    let (service_addr, future) = srv.start();
     tokio::spawn(future);
 
-    let res = addr.call(U8(8)).await.unwrap();
+    // Test ServiceAddress with multiple message types
+    println!("=== Testing ServiceAddress ===");
+    let res = service_addr.call(U8(8)).await.unwrap();
+    println!("ServiceAddress call U8(8): {:?}", res);
 
-    println!("{:?}", res);
+    let res = service_addr.call(U16(8)).await.unwrap();
+    println!("ServiceAddress call U16(8): {:?}", res);
 
-    let res = addr.call(U16(8)).await.unwrap();
+    // Test Address<M> for specific message types
+    println!("\n=== Testing Address<U8> ===");
+    let (addr_u8, forward_future_u8) = service_addr.clone().into_address::<U8>();
+    tokio::spawn(forward_future_u8);
 
-    println!("{:?}", res);
+    let res = addr_u8.call(U8(10)).await.unwrap();
+    println!("Address<U8> call U8(10): {:?}", res);
+
+    addr_u8.send(U8(20)).unwrap();
+    println!("Address<U8> send U8(20): success");
+
+    println!("\n=== Testing Address<U16> ===");
+    let (addr_u16, forward_future_u16) = service_addr.clone().into_address::<U16>();
+    tokio::spawn(forward_future_u16);
+
+    let res = addr_u16.call(U16(100)).await.unwrap();
+    println!("Address<U16> call U16(100): {:?}", res);
+
+    addr_u16.send(U16(200)).unwrap();
+    println!("Address<U16> send U16(200): success");
+
+    // Test that Address<U8> can only send U8 messages (type safety)
+    // This would cause a compile error if we tried:
+    // addr_u8.call(U16(8)).await;  // Compile error: expected U8, found U16
+
+    println!("\n=== All tests completed ===");
 }
