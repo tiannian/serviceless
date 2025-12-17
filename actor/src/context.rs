@@ -2,7 +2,7 @@ use futures_util::StreamExt;
 use std::future::Future;
 use service_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 
-use crate::{Address, EnvelopProxy, Envelope, Service};
+use crate::{EnvelopProxy, Envelope, Service, ServiceAddress};
 
 /// Context to run service
 pub struct Context<S> {
@@ -33,8 +33,8 @@ impl<S> Context<S> {
     ///
     /// Even if service not start, you can also get an address.
     /// But if you send message, the message maybe lost.
-    pub fn addr(&self) -> Address<S> {
-        Address {
+    pub fn addr(&self) -> ServiceAddress<S> {
+        ServiceAddress {
             sender: self.sender.clone(),
         }
     }
@@ -60,7 +60,7 @@ where
     ///
     /// Returns the address and a future that should be spawned to run the service.
     /// The caller is responsible for spawning the returned future using their async runtime.
-    pub fn run(self, service: S) -> (Address<S>, impl Future<Output = ()> + Send) {
+    pub fn run(self, service: S) -> (ServiceAddress<S>, impl Future<Output = ()> + Send) {
         let mut this = self;
 
         let address = this.addr();

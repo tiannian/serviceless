@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use std::future::Future;
 
-use crate::{Address, Context};
+use crate::{Context, ServiceAddress};
 
 /// A service is an running like thread
 #[async_trait]
@@ -10,7 +10,7 @@ pub trait Service: Send + Sized + 'static {
     ///
     /// Returns the address and a future that should be spawned to run the service.
     /// The caller is responsible for spawning the returned future using their async runtime.
-    fn start(self) -> (Address<Self>, impl Future<Output = ()> + Send) {
+    fn start(self) -> (ServiceAddress<Self>, impl Future<Output = ()> + Send) {
         Context::new().run(self)
     }
 
@@ -21,7 +21,7 @@ pub trait Service: Send + Sized + 'static {
     fn start_by_context(
         self,
         ctx: Context<Self>,
-    ) -> (Address<Self>, impl Future<Output = ()> + Send) {
+    ) -> (ServiceAddress<Self>, impl Future<Output = ()> + Send) {
         ctx.run(self)
     }
 

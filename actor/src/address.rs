@@ -5,11 +5,11 @@ use crate::{envelop::Envelope, Error, Handler, Message, Result, Service};
 /// Address of Service
 ///
 /// This address can clone.
-pub struct Address<S> {
+pub struct ServiceAddress<S> {
     pub(crate) sender: UnboundedSender<Envelope<S>>,
 }
 
-impl<S> Clone for Address<S> {
+impl<S> Clone for ServiceAddress<S> {
     fn clone(&self) -> Self {
         Self {
             sender: self.sender.clone(),
@@ -17,14 +17,14 @@ impl<S> Clone for Address<S> {
     }
 }
 
-impl<S> Address<S> {
+impl<S> ServiceAddress<S> {
     /// Return true when service stopped.
     pub fn is_stop(&self) -> bool {
         self.sender.is_closed()
     }
 }
 
-impl<S> Address<S>
+impl<S> ServiceAddress<S>
 where
     S: Service,
 {
