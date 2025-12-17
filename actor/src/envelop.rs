@@ -14,6 +14,24 @@ impl<S> Envelope<S> {
     {
         Self(Box::new(EnvelopWithMessage::new(message, result_channel)))
     }
+
+    /// Create an Envelope from a boxed EnvelopWithMessage without re-boxing
+    ///
+    /// This avoids an extra allocation when forwarding messages from Address to ServiceAddress.
+    /// The Box<EnvelopWithMessage<M>> is converted to Box<dyn EnvelopProxy<S> + Send> through
+    /// type erasure, which doesn't require re-allocation since EnvelopWithMessage<M> already
+    /// implements EnvelopProxy<S>.
+    pub fn from_boxed<M>(boxed: Box<EnvelopWithMessage<M>>) -> Self
+    where
+        S: Handler<M> + Send,
+        M: Message + Send + 'static,
+        M::Result: Send,
+    {
+        // Convert Box<EnvelopWithMessage<M>> to Box<dyn EnvelopProxy<S> + Send>
+        // This is a type erasure that doesn't require re-allocation.
+        // Rust automatically coerces Box<ConcreteType> to Box<dyn Trait> when ConcreteType implements Trait.
+        Self(boxed)
+    }
 }
 
 #[async_trait]
@@ -51,14 +69,6 @@ where
             result_channel,
         }
     }
-
-    /// Extract message and result channel from the envelope
-    pub(crate) fn into_parts(self) -> (M, Option<oneshot::Sender<M::Result>>) {
-        (
-            self.message.expect("message already taken"),
-            self.result_channel,
-        )
-    }
 }
 
 #[async_trait]
@@ -72,11 +82,13 @@ where
         let message = self.message.take();
         let result_channel = self.result_channel.take();
 
-        if let (Some(message), Some(rc)) = (message, result_channel) {
+        if let Some(message) = message {
             let res = <S as Handler<M>>::handler(svc, message, ctx).await;
 
-            if rc.send(res).is_err() {
-                log::warn!("Channel Closed");
+            if let Some(rc) = result_channel {
+                if rc.send(res).is_err() {
+                    log::warn!("Channel Closed");
+                }
             }
         }
     }

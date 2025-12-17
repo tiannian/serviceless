@@ -53,7 +53,7 @@ where
 
     /// Call service's handler without result
     ///
-    /// Beacuse this function don't need result, so it can call without async.
+    /// Because this function don't need result, so it can call without async.
     pub fn send<M>(&self, message: M) -> Result<()>
     where
         M: Message + Send + 'static,
@@ -82,15 +82,15 @@ where
         S: Handler<M> + Send,
         M::Result: Send,
     {
-        let (sender, mut receiver) = unbounded::<EnvelopWithMessage<M>>();
+        let (sender, mut receiver) = unbounded::<Box<EnvelopWithMessage<M>>>();
         let service_sender = self.sender;
 
         let address = Address { sender };
 
         let future = async move {
-            while let Some(env) = receiver.next().await {
-                let (message, result_channel) = env.into_parts();
-                let envelope = Envelope::new(message, result_channel);
+            while let Some(boxed_env) = receiver.next().await {
+                // Convert Box<EnvelopWithMessage<M>> to Envelope<S> without re-boxing
+                let envelope = Envelope::from_boxed(boxed_env);
                 if service_sender.unbounded_send(envelope).is_err() {
                     // Service stopped, break the forwarding loop
                     break;

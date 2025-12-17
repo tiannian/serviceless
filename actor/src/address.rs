@@ -9,7 +9,7 @@ pub struct Address<M>
 where
     M: Message,
 {
-    pub(crate) sender: UnboundedSender<EnvelopWithMessage<M>>,
+    pub(crate) sender: UnboundedSender<Box<EnvelopWithMessage<M>>>,
 }
 
 impl<M> Clone for Address<M>
@@ -37,7 +37,7 @@ where
     pub async fn call(&self, message: M) -> Result<M::Result> {
         let (sender, receiver) = oneshot::channel::<M::Result>();
 
-        let env = EnvelopWithMessage::new(message, Some(sender));
+        let env = Box::new(EnvelopWithMessage::new(message, Some(sender)));
 
         self.sender
             .unbounded_send(env)
@@ -50,7 +50,7 @@ where
     ///
     /// Because this function don't need result, so it can call without async.
     pub fn send(&self, message: M) -> Result<()> {
-        let env = EnvelopWithMessage::new(message, None);
+        let env = Box::new(EnvelopWithMessage::new(message, None));
 
         self.sender
             .unbounded_send(env)
