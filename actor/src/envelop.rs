@@ -1,17 +1,14 @@
 use async_trait::async_trait;
 use service_channel::oneshot;
 
-use crate::{Context, Handler, Message, Service};
+use crate::{Context, Handler, Message};
 
 pub(crate) struct Envelope<S>(Box<dyn EnvelopProxy<S> + Send>);
 
-impl<S> Envelope<S>
-where
-    S: Service + Send,
-{
+impl<S> Envelope<S> {
     pub fn new<M>(message: M, result_channel: Option<oneshot::Sender<M::Result>>) -> Self
     where
-        S: Handler<M>,
+        S: Handler<M> + Send,
         M: Message + Send + 'static,
         M::Result: Send,
     {
