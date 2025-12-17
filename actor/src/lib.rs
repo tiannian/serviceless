@@ -15,3 +15,6 @@ pub use error::*;
 
 mod address;
 pub use address::*;
+
+mod service_address;
+pub use service_address::*;
