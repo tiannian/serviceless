@@ -12,10 +12,7 @@ impl<S> Envelope<S> {
         M: Message + Send + 'static,
         M::Result: Send,
     {
-        Self(Box::new(EnvelopWithMessage {
-            message: Some(message),
-            result_channel,
-        }))
+        Self(Box::new(EnvelopWithMessage::new(message, result_channel)))
     }
 }
 
@@ -42,6 +39,18 @@ where
 {
     message: Option<M>,
     result_channel: Option<oneshot::Sender<M::Result>>,
+}
+
+impl<M> EnvelopWithMessage<M>
+where
+    M: Message,
+{
+    pub(crate) fn new(message: M, result_channel: Option<oneshot::Sender<M::Result>>) -> Self {
+        Self {
+            message: Some(message),
+            result_channel,
+        }
+    }
 }
 
 #[async_trait]
