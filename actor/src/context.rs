@@ -8,7 +8,6 @@ use crate::{EnvelopProxy, Envelope, Service, ServiceAddress};
 pub struct Context<S> {
     sender: UnboundedSender<Envelope<S>>,
     receiver: UnboundedReceiver<Envelope<S>>,
-    pub(crate) paused: bool,
 }
 
 impl<S> Default for Context<S> {
@@ -25,7 +24,6 @@ impl<S> Context<S> {
         Self {
             sender,
             receiver,
-            paused: false,
         }
     }
 
@@ -37,13 +35,6 @@ impl<S> Context<S> {
         ServiceAddress {
             sender: self.sender.clone(),
         }
-    }
-
-    /// Pause context
-    ///
-    /// Notice: This funcion is unusable now.
-    pub fn pause(&mut self) {
-        self.paused = true;
     }
 
     /// Stop an service

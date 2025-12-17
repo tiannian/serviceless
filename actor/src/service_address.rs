@@ -1,6 +1,11 @@
-use service_channel::{mpsc::UnboundedSender, oneshot};
+use futures_util::StreamExt;
+use service_channel::mpsc::{unbounded, UnboundedSender};
+use service_channel::oneshot;
+use std::future::Future;
 
-use crate::{envelop::Envelope, Error, Handler, Message, Result, Service};
+use crate::{
+    address::Address, envelop::{Envelope, EnvelopWithMessage}, Error, Handler, Message, Result, Service,
+};
 
 /// Address of Service
 ///
@@ -43,13 +48,12 @@ where
             .unbounded_send(env)
             .map_err(|_| Error::ServiceStoped)?;
 
-        receiver.await.map_err(|_| Error::ServicePaused)
+        receiver.await.map_err(|_| Error::ServiceStoped)
     }
 
     /// Call service's handler without result
     ///
     /// Beacuse this function don't need result, so it can call without async.
-    /// If service paused, we have no ServicePaused return.
     pub fn send<M>(&self, message: M) -> Result<()>
     where
         M: Message + Send + 'static,
@@ -63,5 +67,37 @@ where
             .map_err(|_| Error::ServiceStoped)?;
 
         Ok(())
+    }
+
+    /// Convert ServiceAddress to Address for a specific message type
+    ///
+    /// This creates a forwarding task that receives messages from the Address
+    /// and forwards them to the ServiceAddress. The returned Address can only
+    /// send messages of type M.
+    ///
+    /// Returns the Address and a Future that should be spawned to run the forwarding task.
+    pub fn into_address<M>(self) -> (Address<M>, impl Future<Output = ()> + Send)
+    where
+        M: Message + Send + 'static,
+        S: Handler<M> + Send,
+        M::Result: Send,
+    {
+        let (sender, mut receiver) = unbounded::<EnvelopWithMessage<M>>();
+        let service_sender = self.sender;
+
+        let address = Address { sender };
+
+        let future = async move {
+            while let Some(env) = receiver.next().await {
+                let (message, result_channel) = env.into_parts();
+                let envelope = Envelope::new(message, result_channel);
+                if service_sender.unbounded_send(envelope).is_err() {
+                    // Service stopped, break the forwarding loop
+                    break;
+                }
+            }
+        };
+
+        (address, future)
     }
 }
