@@ -51,7 +51,7 @@ where
 impl<S, M> EnvelopProxy<S> for EnvelopWithMessage<M>
 where
     M: Message + Send,
-    S: Service + Handler<M> + Send,
+    S: Handler<M> + Send,
     M::Result: Send,
 {
     async fn handle(&mut self, svc: &mut S, ctx: &mut Context<S>) {
