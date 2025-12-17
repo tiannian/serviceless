@@ -51,6 +51,14 @@ where
             result_channel,
         }
     }
+
+    /// Extract message and result channel from the envelope
+    pub(crate) fn into_parts(self) -> (M, Option<oneshot::Sender<M::Result>>) {
+        (
+            self.message.expect("message already taken"),
+            self.result_channel,
+        )
+    }
 }
 
 #[async_trait]
