@@ -9,6 +9,10 @@ impl Service for Service0 {
     async fn started(&mut self, _ctx: &mut Context<Self>) {
         println!("Started")
     }
+
+    async fn stopped(&mut self, _ctx: &mut Context<Self>) {
+        println!("Stopped")
+    }
 }
 
 #[derive(Debug)]
