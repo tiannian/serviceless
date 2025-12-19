@@ -2,7 +2,7 @@ use futures_util::StreamExt;
 use std::future::Future;
 use service_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 
-use crate::{EnvelopProxy, Envelope, Service, ServiceAddress};
+use crate::{Envelope, Service, ServiceAddress};
 
 /// Context to run service
 pub struct Context<S> {
@@ -60,7 +60,7 @@ where
 
         let future = async move {
             service.started(&mut this).await;
-            while let Some(mut e) = this.receiver.next().await {
+            while let Some(e) = this.receiver.next().await {
                 e.handle(&mut service, &mut this).await;
             }
             service.stopped(&mut this).await;

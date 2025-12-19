@@ -34,28 +34,25 @@ impl<S> Envelope<S> {
     }
 }
 
-#[async_trait]
-impl<S> EnvelopProxy<S> for Envelope<S>
+impl<S> Envelope<S>
 where
     S: Send,
 {
-    async fn handle(&mut self, svc: &mut S, ctx: &mut Context<S>) {
-        let r = &mut self.0;
-
-        r.handle(svc, ctx).await
+    pub async fn handle(self, svc: &mut S, ctx: &mut Context<S>) {
+        self.0.handle(svc, ctx).await
     }
 }
 
 #[async_trait]
 pub(crate) trait EnvelopProxy<S> {
-    async fn handle(&mut self, svc: &mut S, ctx: &mut Context<S>);
+    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut Context<S>);
 }
 
 pub(crate) struct EnvelopWithMessage<M>
 where
     M: Message,
 {
-    message: Option<M>,
+    message: M,
     result_channel: Option<oneshot::Sender<M::Result>>,
 }
 
@@ -65,7 +62,7 @@ where
 {
     pub(crate) fn new(message: M, result_channel: Option<oneshot::Sender<M::Result>>) -> Self {
         Self {
-            message: Some(message),
+            message,
             result_channel,
         }
     }
@@ -78,11 +75,10 @@ where
     S: Handler<M> + Send,
     M::Result: Send,
 {
-    async fn handle(&mut self, svc: &mut S, ctx: &mut Context<S>) {
-        let message = self.message.take();
-        let result_channel = self.result_channel.take();
+    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut Context<S>) {
+        let message = self.message;
+        let result_channel = self.result_channel;
 
-        if let Some(message) = message {
             let res = <S as Handler<M>>::handler(svc, message, ctx).await;
 
             if let Some(rc) = result_channel {
@@ -90,6 +86,5 @@ where
                     log::warn!("Channel Closed");
                 }
             }
-        }
     }
 }
