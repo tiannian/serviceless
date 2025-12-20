@@ -37,7 +37,10 @@ unsafe impl<T: Send> Sync for Lock<T> {}
 impl<T> Lock<T> {
     /// Creates a new lock around the given value.
     pub(crate) fn new(t: T) -> Self {
-        Self { locked: AtomicBool::new(false), data: UnsafeCell::new(t) }
+        Self {
+            locked: AtomicBool::new(false),
+            data: UnsafeCell::new(t),
+        }
     }
 
     /// Attempts to acquire this lock, returning whether the lock was acquired or

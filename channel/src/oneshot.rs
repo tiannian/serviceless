@@ -105,7 +105,9 @@ struct Inner<T> {
 /// ```
 pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
     let inner = Arc::new(Inner::new());
-    let receiver = Receiver { inner: inner.clone() };
+    let receiver = Receiver {
+        inner: inner.clone(),
+    };
     let sender = Sender { inner };
     (sender, receiver)
 }
@@ -394,7 +396,9 @@ impl<T> Drop for Sender<T> {
 
 impl<T> fmt::Debug for Sender<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Sender").field("complete", &self.inner.complete).finish()
+        f.debug_struct("Sender")
+            .field("complete", &self.inner.complete)
+            .finish()
     }
 }
 
@@ -485,6 +489,8 @@ impl<T> Drop for Receiver<T> {
 
 impl<T> fmt::Debug for Receiver<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Receiver").field("complete", &self.inner.complete).finish()
+        f.debug_struct("Receiver")
+            .field("complete", &self.inner.complete)
+            .finish()
     }
 }

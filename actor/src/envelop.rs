@@ -79,12 +79,12 @@ where
         let message = self.message;
         let result_channel = self.result_channel;
 
-            let res = <S as Handler<M>>::handler(svc, message, ctx).await;
+        let res = <S as Handler<M>>::handler(svc, message, ctx).await;
 
-            if let Some(rc) = result_channel {
-                if rc.send(res).is_err() {
-                    log::warn!("Channel Closed");
-                }
+        if let Some(rc) = result_channel {
+            if rc.send(res).is_err() {
+                log::warn!("Channel Closed");
             }
+        }
     }
 }

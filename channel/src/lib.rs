@@ -14,8 +14,8 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-pub mod mpsc;
 mod lock;
+pub mod mpsc;
 pub mod oneshot;
 mod queue;
 mod sink;

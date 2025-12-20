@@ -4,7 +4,9 @@ use service_channel::oneshot;
 use std::future::Future;
 
 use crate::{
-    address::Address, envelop::{Envelope, EnvelopWithMessage}, Error, Handler, Message, Result, Service,
+    address::Address,
+    envelop::{EnvelopWithMessage, Envelope},
+    Error, Handler, Message, Result, Service,
 };
 
 /// Address of Service

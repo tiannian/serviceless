@@ -1,6 +1,6 @@
 use futures_util::StreamExt;
-use std::future::Future;
 use service_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use std::future::Future;
 
 use crate::{Envelope, Service, ServiceAddress};
 
@@ -21,10 +21,7 @@ impl<S> Context<S> {
     pub fn new() -> Self {
         let (sender, receiver) = unbounded();
 
-        Self {
-            sender,
-            receiver,
-        }
+        Self { sender, receiver }
     }
 
     /// Get service's address
