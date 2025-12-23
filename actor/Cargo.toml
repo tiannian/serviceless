@@ -12,7 +12,7 @@ readme = "../README.md"
 async-trait = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
-service-channel = { path = "../channel" }
+service-channel = { path = "../channel", version = "0.1.0" }
 futures-util = { workspace = true }
 
 [dev-dependencies]
