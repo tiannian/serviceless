@@ -29,6 +29,11 @@ impl<S> ServiceAddress<S> {
     pub fn is_stop(&self) -> bool {
         self.sender.is_closed()
     }
+
+    /// Close the service channel
+    pub fn close_service(&self) {
+        self.sender.close_channel()
+    }
 }
 
 impl<S> ServiceAddress<S>

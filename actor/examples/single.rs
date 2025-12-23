@@ -48,7 +48,7 @@ async fn main() {
     let srv = Service0::default();
 
     let (service_addr, future) = srv.start();
-    tokio::spawn(future);
+    let service_handle = tokio::spawn(future);
 
     // Test ServiceAddress with multiple message types
     println!("=== Testing ServiceAddress ===");
@@ -82,6 +82,23 @@ async fn main() {
     // Test that Address<U8> can only send U8 messages (type safety)
     // This would cause a compile error if we tried:
     // addr_u8.call(U16(8)).await;  // Compile error: expected U8, found U16
+
+    // Test close_service method
+    println!("\n=== Testing close_service ===");
+    assert!(!service_addr.is_stop(), "Service should not be stopped before close_service");
+    service_addr.close_service();
+    assert!(service_addr.is_stop(), "Service should be stopped after close_service");
+    println!("close_service called successfully, service is now stopped");
+
+    // Wait for the service future to complete, which will call stopped hook
+    println!("Waiting for service to stop and call stopped hook...");
+    service_handle.await.unwrap();
+    println!("Service future completed, stopped hook should have been called");
+
+    // Verify that sending messages after close fails
+    let result = service_addr.send(U8(30));
+    assert!(result.is_err(), "Sending message after close_service should fail");
+    println!("Verified: sending message after close_service fails as expected");
 
     println!("\n=== All tests completed ===");
 }
