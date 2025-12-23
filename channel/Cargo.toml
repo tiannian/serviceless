@@ -2,6 +2,9 @@
 name = "service-channel"
 version = "0.1.0"
 edition = "2021"
+description = "An simple actor model in rust, like actix"
+license = "MIT"
+readme = "../README.md"
 
 [dependencies]
 futures-core = { workspace = true }
