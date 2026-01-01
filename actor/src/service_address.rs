@@ -49,7 +49,7 @@ where
     {
         let (sender, receiver) = oneshot::channel::<M::Result>();
 
-        let env = Envelope::new(message, Some(sender));
+        let env = Envelope::new_with_result_channel(message, Some(sender));
 
         self.sender
             .unbounded_send(env)
@@ -67,7 +67,7 @@ where
         S: Handler<M>,
         M::Result: Send,
     {
-        let env = Envelope::new(message, None);
+        let env = Envelope::new(message);
 
         self.sender
             .unbounded_send(env)

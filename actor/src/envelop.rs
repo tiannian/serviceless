@@ -1,12 +1,24 @@
 use async_trait::async_trait;
 use service_channel::oneshot;
 
-use crate::{Context, Handler, Message};
+use crate::{Context, Handler, Message, Service};
 
-pub(crate) struct Envelope<S>(Box<dyn EnvelopProxy<S> + Send>);
+pub struct Envelope<S>(Box<dyn EnvelopProxy<S> + Send>);
 
 impl<S> Envelope<S> {
-    pub fn new<M>(message: M, result_channel: Option<oneshot::Sender<M::Result>>) -> Self
+    pub fn new<M>(message: M) -> Self
+    where
+        M: Message + Send + 'static,
+        S: Handler<M> + Send,
+        M::Result: Send,
+    {
+        Self(Box::new(EnvelopWithMessage::new(message, None)))
+    }
+
+    pub fn new_with_result_channel<M>(
+        message: M,
+        result_channel: Option<oneshot::Sender<M::Result>>,
+    ) -> Self
     where
         S: Handler<M> + Send,
         M: Message + Send + 'static,
@@ -21,7 +33,7 @@ impl<S> Envelope<S> {
     /// The Box<EnvelopWithMessage<M>> is converted to Box<dyn EnvelopProxy<S> + Send> through
     /// type erasure, which doesn't require re-allocation since EnvelopWithMessage<M> already
     /// implements EnvelopProxy<S>.
-    pub fn from_boxed<M>(boxed: Box<EnvelopWithMessage<M>>) -> Self
+    pub(crate) fn from_boxed<M>(boxed: Box<EnvelopWithMessage<M>>) -> Self
     where
         S: Handler<M> + Send,
         M: Message + Send + 'static,
@@ -36,16 +48,16 @@ impl<S> Envelope<S> {
 
 impl<S> Envelope<S>
 where
-    S: Send,
+    S: Service + Send,
 {
-    pub async fn handle(self, svc: &mut S, ctx: &mut Context<S>) {
+    pub async fn handle(self, svc: &mut S, ctx: &mut Context<S, S::Stream>) {
         self.0.handle(svc, ctx).await
     }
 }
 
 #[async_trait]
-pub(crate) trait EnvelopProxy<S> {
-    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut Context<S>);
+pub(crate) trait EnvelopProxy<S: Service> {
+    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut Context<S, S::Stream>);
 }
 
 pub(crate) struct EnvelopWithMessage<M>
@@ -75,11 +87,11 @@ where
     S: Handler<M> + Send,
     M::Result: Send,
 {
-    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut Context<S>) {
+    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut Context<S, S::Stream>) {
         let message = self.message;
         let result_channel = self.result_channel;
 
-        let res = <S as Handler<M>>::handler(svc, message, ctx).await;
+        let res = <S as Handler<M>>::handle(svc, message, ctx).await;
 
         if let Some(rc) = result_channel {
             if rc.send(res).is_err() {

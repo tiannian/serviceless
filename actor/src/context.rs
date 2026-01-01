@@ -1,27 +1,46 @@
-use futures_util::StreamExt;
+use futures_util::{
+    stream::{empty, select, Empty, Select},
+    Stream, StreamExt,
+};
 use service_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use std::future::Future;
 
 use crate::{Envelope, Service, ServiceAddress};
 
 /// Context to run service
-pub struct Context<S> {
+pub struct Context<S, T>
+where
+    T: Stream<Item = Envelope<S>> + Unpin,
+{
     sender: UnboundedSender<Envelope<S>>,
-    receiver: UnboundedReceiver<Envelope<S>>,
+    receiver: Select<UnboundedReceiver<Envelope<S>>, T>,
 }
 
-impl<S> Default for Context<S> {
+impl<S> Default for Context<S, Empty<Envelope<S>>> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S> Context<S> {
+impl<S> Context<S, Empty<Envelope<S>>> {
     /// Create an empty context
     pub fn new() -> Self {
+        Self::with_stream(empty())
+    }
+}
+
+impl<S, T> Context<S, T>
+where
+    T: Stream<Item = Envelope<S>> + Unpin,
+{
+    /// Create a context with an additional stream of envelopes.
+    pub fn with_stream(stream: T) -> Self {
         let (sender, receiver) = unbounded();
 
-        Self { sender, receiver }
+        Self {
+            sender,
+            receiver: select(receiver, stream),
+        }
     }
 
     /// Get service's address
@@ -38,11 +57,17 @@ impl<S> Context<S> {
     pub fn stop(&mut self) {
         self.sender.close_channel()
     }
+
+    pub fn stream(&mut self) -> &mut T {
+        let (_, stream) = self.receiver.get_mut();
+        stream
+    }
 }
 
-impl<S> Context<S>
+impl<S, T> Context<S, T>
 where
-    S: Service + Send,
+    S: Service<Stream = T> + Send + Sized,
+    T: Stream<Item = Envelope<S>> + Unpin + Send,
 {
     /// Start an service
     ///
