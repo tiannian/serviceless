@@ -85,9 +85,15 @@ async fn main() {
 
     // Test close_service method
     println!("\n=== Testing close_service ===");
-    assert!(!service_addr.is_stop(), "Service should not be stopped before close_service");
+    assert!(
+        !service_addr.is_stop(),
+        "Service should not be stopped before close_service"
+    );
     service_addr.close_service();
-    assert!(service_addr.is_stop(), "Service should be stopped after close_service");
+    assert!(
+        service_addr.is_stop(),
+        "Service should be stopped after close_service"
+    );
     println!("close_service called successfully, service is now stopped");
 
     // Wait for the service future to complete, which will call stopped hook
@@ -97,7 +103,10 @@ async fn main() {
 
     // Verify that sending messages after close fails
     let result = service_addr.send(U8(30));
-    assert!(result.is_err(), "Sending message after close_service should fail");
+    assert!(
+        result.is_err(),
+        "Sending message after close_service should fail"
+    );
     println!("Verified: sending message after close_service fails as expected");
 
     println!("\n=== All tests completed ===");
