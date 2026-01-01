@@ -10,7 +10,7 @@ where
     M: Message,
 {
     /// Handle message
-    async fn handler(&mut self, message: M, ctx: &mut Context<Self>) -> M::Result;
+    async fn handler(&mut self, message: M, ctx: &mut dyn Context<Self>) -> M::Result;
 }
 
 /// Message

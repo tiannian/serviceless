@@ -3,7 +3,7 @@ use service_channel::oneshot;
 
 use crate::{Context, Handler, Message};
 
-pub(crate) struct Envelope<S>(Box<dyn EnvelopProxy<S> + Send>);
+pub struct Envelope<S>(Box<dyn EnvelopProxy<S> + Send>);
 
 impl<S> Envelope<S> {
     pub fn new<M>(message: M, result_channel: Option<oneshot::Sender<M::Result>>) -> Self
@@ -21,7 +21,7 @@ impl<S> Envelope<S> {
     /// The Box<EnvelopWithMessage<M>> is converted to Box<dyn EnvelopProxy<S> + Send> through
     /// type erasure, which doesn't require re-allocation since EnvelopWithMessage<M> already
     /// implements EnvelopProxy<S>.
-    pub fn from_boxed<M>(boxed: Box<EnvelopWithMessage<M>>) -> Self
+    pub(crate) fn from_boxed<M>(boxed: Box<EnvelopWithMessage<M>>) -> Self
     where
         S: Handler<M> + Send,
         M: Message + Send + 'static,
@@ -38,14 +38,14 @@ impl<S> Envelope<S>
 where
     S: Send,
 {
-    pub async fn handle(self, svc: &mut S, ctx: &mut Context<S>) {
+    pub async fn handle(self, svc: &mut S, ctx: &mut dyn Context<S>) {
         self.0.handle(svc, ctx).await
     }
 }
 
 #[async_trait]
 pub(crate) trait EnvelopProxy<S> {
-    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut Context<S>);
+    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut dyn Context<S>);
 }
 
 pub(crate) struct EnvelopWithMessage<M>
@@ -75,7 +75,7 @@ where
     S: Handler<M> + Send,
     M::Result: Send,
 {
-    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut Context<S>) {
+    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut dyn Context<S>) {
         let message = self.message;
         let result_channel = self.result_channel;
 

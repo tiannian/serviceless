@@ -6,11 +6,11 @@ pub struct Service0 {}
 
 #[async_trait]
 impl Service for Service0 {
-    async fn started(&mut self, _ctx: &mut Context<Self>) {
+    async fn started(&mut self, _ctx: &mut dyn Context<Self>) {
         println!("Started")
     }
 
-    async fn stopped(&mut self, _ctx: &mut Context<Self>) {
+    async fn stopped(&mut self, _ctx: &mut dyn Context<Self>) {
         println!("Stopped")
     }
 }
@@ -27,7 +27,7 @@ impl<T: std::fmt::Debug> Message for GenericMessage<T> {
 
 #[async_trait]
 impl<T: std::fmt::Debug + Send + 'static> Handler<GenericMessage<T>> for Service0 {
-    async fn handler(&mut self, message: GenericMessage<T>, _ctx: &mut Context<Self>) -> u8 {
+    async fn handler(&mut self, message: GenericMessage<T>, _ctx: &mut dyn Context<Self>) -> u8 {
         println!("Received generic message: {:?}", message);
         1
     }
