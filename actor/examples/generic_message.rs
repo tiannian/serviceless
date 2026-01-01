@@ -1,16 +1,18 @@
 use async_trait::async_trait;
-use serviceless::{Context, Handler, Message, Service};
+use serviceless::{Context, EmptyStream, Handler, Message, Service};
 
 #[derive(Debug, Default)]
 pub struct Service0 {}
 
 #[async_trait]
 impl Service for Service0 {
-    async fn started(&mut self, _ctx: &mut dyn Context<Self>) {
+    type Stream = EmptyStream<Self>;
+
+    async fn started(&mut self, _ctx: &mut Context<Self, Self::Stream>) {
         println!("Started")
     }
 
-    async fn stopped(&mut self, _ctx: &mut dyn Context<Self>) {
+    async fn stopped(&mut self, _ctx: &mut Context<Self, Self::Stream>) {
         println!("Stopped")
     }
 }
@@ -27,7 +29,11 @@ impl<T: std::fmt::Debug> Message for GenericMessage<T> {
 
 #[async_trait]
 impl<T: std::fmt::Debug + Send + 'static> Handler<GenericMessage<T>> for Service0 {
-    async fn handle(&mut self, message: GenericMessage<T>, _ctx: &mut dyn Context<Self>) -> u8 {
+    async fn handle(
+        &mut self,
+        message: GenericMessage<T>,
+        _ctx: &mut Context<Self, Self::Stream>,
+    ) -> u8 {
         println!("Received generic message: {:?}", message);
         1
     }
@@ -37,7 +43,9 @@ impl<T: std::fmt::Debug + Send + 'static> Handler<GenericMessage<T>> for Service
 async fn main() {
     let srv = Service0::default();
 
-    let (service_addr, future) = srv.start();
+    let ctx = Context::new();
+
+    let (service_addr, future) = srv.start_by_context(ctx);
     let service_handle = tokio::spawn(future);
 
     // Test with different types
