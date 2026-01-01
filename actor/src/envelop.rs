@@ -1,18 +1,18 @@
 use async_trait::async_trait;
 use service_channel::oneshot;
 
-use crate::{Context, Handler, Message};
+use crate::{Context, Handler, Message, Service};
 
 pub struct Envelope<S>(Box<dyn EnvelopProxy<S> + Send>);
 
 impl<S> Envelope<S> {
     pub fn new<M>(message: M) -> Self
     where
-        S: Handler<M> + Send,
         M: Message + Send + 'static,
+        S: Handler<M> + Send,
         M::Result: Send,
     {
-        Self::new_with_result_channel(message, None)
+        Self(Box::new(EnvelopWithMessage::new(message, None)))
     }
 
     pub fn new_with_result_channel<M>(
@@ -48,16 +48,16 @@ impl<S> Envelope<S> {
 
 impl<S> Envelope<S>
 where
-    S: Send,
+    S: Service + Send,
 {
-    pub async fn handle(self, svc: &mut S, ctx: &mut dyn Context<S>) {
+    pub async fn handle(self, svc: &mut S, ctx: &mut Context<S, S::Stream>) {
         self.0.handle(svc, ctx).await
     }
 }
 
 #[async_trait]
-pub(crate) trait EnvelopProxy<S> {
-    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut dyn Context<S>);
+pub(crate) trait EnvelopProxy<S: Service> {
+    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut Context<S, S::Stream>);
 }
 
 pub(crate) struct EnvelopWithMessage<M>
@@ -87,11 +87,11 @@ where
     S: Handler<M> + Send,
     M::Result: Send,
 {
-    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut dyn Context<S>) {
+    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut Context<S, S::Stream>) {
         let message = self.message;
         let result_channel = self.result_channel;
 
-        let res = <S as Handler<M>>::handler(svc, message, ctx).await;
+        let res = <S as Handler<M>>::handle(svc, message, ctx).await;
 
         if let Some(rc) = result_channel {
             if rc.send(res).is_err() {

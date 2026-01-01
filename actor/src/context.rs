@@ -7,14 +7,8 @@ use std::future::Future;
 
 use crate::{Envelope, Service, ServiceAddress};
 
-pub trait Context<S>: Send {
-    fn addr(&self) -> ServiceAddress<S>;
-
-    fn stop(&mut self);
-}
-
 /// Context to run service
-pub struct ContextRuntime<S, T = Empty<Envelope<S>>>
+pub struct Context<S, T>
 where
     T: Stream<Item = Envelope<S>> + Unpin,
 {
@@ -22,20 +16,20 @@ where
     receiver: Select<UnboundedReceiver<Envelope<S>>, T>,
 }
 
-impl<S> Default for ContextRuntime<S, Empty<Envelope<S>>> {
+impl<S> Default for Context<S, Empty<Envelope<S>>> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S> ContextRuntime<S, Empty<Envelope<S>>> {
+impl<S> Context<S, Empty<Envelope<S>>> {
     /// Create an empty context
     pub fn new() -> Self {
         Self::with_stream(empty())
     }
 }
 
-impl<S, T> ContextRuntime<S, T>
+impl<S, T> Context<S, T>
 where
     T: Stream<Item = Envelope<S>> + Unpin,
 {
@@ -53,34 +47,26 @@ where
     ///
     /// Even if service not start, you can also get an address.
     /// But if you send message, the message maybe lost.
-    pub(crate) fn _addr(&self) -> ServiceAddress<S> {
+    pub fn addr(&self) -> ServiceAddress<S> {
         ServiceAddress {
             sender: self.sender.clone(),
         }
     }
 
     /// Stop an service
-    fn _stop(&mut self) {
+    pub fn stop(&mut self) {
         self.sender.close_channel()
     }
-}
 
-impl<S, T> Context<S> for ContextRuntime<S, T>
-where
-    T: Stream<Item = Envelope<S>> + Unpin + Send,
-{
-    fn addr(&self) -> ServiceAddress<S> {
-        self._addr()
-    }
-
-    fn stop(&mut self) {
-        self._stop()
+    pub fn stream(&mut self) -> &mut T {
+        let (_, stream) = self.receiver.get_mut();
+        stream
     }
 }
 
-impl<S, T> ContextRuntime<S, T>
+impl<S, T> Context<S, T>
 where
-    S: Service + Send,
+    S: Service<Stream = T> + Send + Sized,
     T: Stream<Item = Envelope<S>> + Unpin + Send,
 {
     /// Start an service
@@ -90,7 +76,7 @@ where
     pub fn run(self, service: S) -> (ServiceAddress<S>, impl Future<Output = ()> + Send) {
         let mut this = self;
 
-        let address = this._addr();
+        let address = this.addr();
 
         let mut service = service;
 

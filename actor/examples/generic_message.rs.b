@@ -27,7 +27,7 @@ impl<T: std::fmt::Debug> Message for GenericMessage<T> {
 
 #[async_trait]
 impl<T: std::fmt::Debug + Send + 'static> Handler<GenericMessage<T>> for Service0 {
-    async fn handler(&mut self, message: GenericMessage<T>, _ctx: &mut dyn Context<Self>) -> u8 {
+    async fn handle(&mut self, message: GenericMessage<T>, _ctx: &mut dyn Context<Self>) -> u8 {
         println!("Received generic message: {:?}", message);
         1
     }

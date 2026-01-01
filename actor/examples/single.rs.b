@@ -6,6 +6,7 @@ pub struct Service0 {}
 
 #[async_trait]
 impl Service for Service0 {
+    // type Stream = Empty<Envelope<Self>>;
     async fn started(&mut self, _ctx: &mut dyn Context<Self>) {
         println!("Started")
     }
@@ -24,7 +25,7 @@ impl Message for U8 {
 
 #[async_trait]
 impl Handler<U8> for Service0 {
-    async fn handler(&mut self, message: U8, _ctx: &mut dyn Context<Self>) -> U8 {
+    async fn handle(&mut self, message: U8, _ctx: &mut dyn Context<Self>) -> U8 {
         U8(message.0 + 2)
     }
 }
@@ -38,7 +39,7 @@ impl Message for U16 {
 
 #[async_trait]
 impl Handler<U16> for Service0 {
-    async fn handler(&mut self, message: U16, _ctx: &mut dyn Context<Self>) -> U16 {
+    async fn handle(&mut self, message: U16, _ctx: &mut dyn Context<Self>) -> U16 {
         U16(message.0 + 300)
     }
 }

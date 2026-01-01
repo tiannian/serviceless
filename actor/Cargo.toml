@@ -14,6 +14,7 @@ log = { workspace = true }
 thiserror = { workspace = true }
 service-channel = { path = "../channel", version = "0.1.0" }
 futures-util = { workspace = true }
+futures-core = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
