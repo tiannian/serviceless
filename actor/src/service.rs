@@ -1,8 +1,11 @@
 use async_trait::async_trait;
 use futures_core::Stream;
+use futures_util::stream::Empty;
 use std::future::Future;
 
 use crate::{Context, Envelope, ServiceAddress};
+
+pub type EmptyStream<S> = Empty<Envelope<S>>;
 
 /// A service is an running like thread
 #[async_trait]
