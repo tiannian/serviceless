@@ -6,7 +6,19 @@ use crate::{Context, Handler, Message};
 pub struct Envelope<S>(Box<dyn EnvelopProxy<S> + Send>);
 
 impl<S> Envelope<S> {
-    pub fn new<M>(message: M, result_channel: Option<oneshot::Sender<M::Result>>) -> Self
+    pub fn new<M>(message: M) -> Self
+    where
+        S: Handler<M> + Send,
+        M: Message + Send + 'static,
+        M::Result: Send,
+    {
+        Self::new_with_result_channel(message, None)
+    }
+
+    pub fn new_with_result_channel<M>(
+        message: M,
+        result_channel: Option<oneshot::Sender<M::Result>>,
+    ) -> Self
     where
         S: Handler<M> + Send,
         M: Message + Send + 'static,
