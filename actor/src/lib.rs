@@ -8,7 +8,7 @@ mod handler;
 pub use handler::*;
 
 mod envelop;
-pub(crate) use envelop::*;
+pub use envelop::*;
 
 mod error;
 pub use error::*;
