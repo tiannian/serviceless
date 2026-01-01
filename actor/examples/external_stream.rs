@@ -3,49 +3,26 @@ use futures_util::{
     future::{ready, Ready as FuturesReady},
     stream::{once, Once},
 };
-use service_channel::oneshot;
+use std::time::Duration;
+use tokio::time::sleep;
 
 use serviceless::{Context, Envelope, Handler, Message, Service};
 
 #[derive(Debug, Default)]
-struct ExternalStreamService {
-    stream_events: Vec<String>,
-}
+struct ExternalStreamService {}
 
 #[derive(Debug)]
-struct StreamEvent {
-    payload: String,
-    ack: oneshot::Sender<()>,
-}
+struct StreamEvent(pub u8);
 
 impl Message for StreamEvent {
-    type Result = ();
+    type Result = u8;
 }
 
 #[async_trait]
 impl Handler<StreamEvent> for ExternalStreamService {
-    async fn handle(&mut self, message: StreamEvent, _ctx: &mut Context<Self, Self::Stream>) {
-        println!("stream pushed: {}", message.payload);
-        self.stream_events.push(message.payload);
-        let _ = message.ack.send(());
-    }
-}
-
-#[derive(Debug)]
-struct QueryStreamEvents;
-
-impl Message for QueryStreamEvents {
-    type Result = usize;
-}
-
-#[async_trait]
-impl Handler<QueryStreamEvents> for ExternalStreamService {
-    async fn handle(
-        &mut self,
-        _message: QueryStreamEvents,
-        _ctx: &mut Context<Self, Self::Stream>,
-    ) -> usize {
-        self.stream_events.len()
+    async fn handle(&mut self, message: StreamEvent, _ctx: &mut Context<Self, Self::Stream>) -> u8 {
+        println!("stream pushed: {}", message.0);
+        message.0
     }
 }
 
@@ -64,26 +41,14 @@ impl Service for ExternalStreamService {
 
 #[tokio::main]
 async fn main() {
-    let (ack_tx, ack_rx) = oneshot::channel();
-
-    let stream = once(ready(Envelope::new(StreamEvent {
-        payload: "external stream event".to_string(),
-        ack: ack_tx,
-    })));
+    let stream = once(ready(Envelope::new(StreamEvent(0x42))));
 
     let ctx = Context::with_stream(stream);
 
     let (service_addr, future) = ExternalStreamService::default().start_by_context(ctx);
     let service_handle = tokio::spawn(future);
 
-    ack_rx.await.expect("stream ack failed");
-
-    let handled_events = service_addr
-        .call(QueryStreamEvents)
-        .await
-        .expect("service call failed");
-    println!("handled stream events: {}", handled_events);
-    assert_eq!(handled_events, 1);
+    sleep(Duration::from_millis(20)).await;
 
     service_addr.close_service();
     service_handle.await.expect("service join failed");
