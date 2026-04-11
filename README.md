@@ -99,8 +99,10 @@ for your service.
 use async_trait::async_trait;
 use serviceless::{Context, EmptyStream, Handler, Message, Service};
 
-# #[derive(Default)] pub struct Service0;
-# #[async_trait] impl Service for Service0 { type Stream = EmptyStream<Self>; }
+#[derive(Default)]
+pub struct Service0;
+#[async_trait]
+impl Service for Service0 { type Stream = EmptyStream<Self>; }
 
 pub struct U8(pub u8);
 
