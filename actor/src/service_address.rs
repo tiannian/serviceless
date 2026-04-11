@@ -8,6 +8,7 @@ use crate::{
     envelop::{EnvelopWithMessage, Envelope},
     Error, Handler, Message, Result, Service,
 };
+use crate::{RoutedTopic, Topic};
 
 /// Address of Service
 ///
@@ -74,6 +75,23 @@ where
             .map_err(|_| Error::ServiceStoped)?;
 
         Ok(())
+    }
+
+    /// Subscribe once to topic T.
+    ///
+    /// One call waits for one future publication.
+    pub async fn subscribe<T>(&self) -> Result<T::Item>
+    where
+        T: Topic + RoutedTopic<S>,
+    {
+        let (sender, receiver) = oneshot::channel::<T::Item>();
+        let env = Envelope::<S>::new_subscribe_topic::<T>(sender);
+
+        self.sender
+            .unbounded_send(env)
+            .map_err(|_| Error::ServiceStoped)?;
+
+        receiver.await.map_err(|_| Error::ServiceStoped)
     }
 
     /// Convert ServiceAddress to Address for a specific message type

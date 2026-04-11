@@ -7,6 +7,9 @@ pub use context::*;
 mod handler;
 pub use handler::*;
 
+mod topic;
+pub use topic::*;
+
 mod envelop;
 pub use envelop::*;
 
