@@ -6,7 +6,7 @@
 //! ## Source
 //!
 //! This implementation is derived from the `futures-channel` crate.
-//! Original code: https://github.com/rust-lang/futures-rs/tree/master/futures-channel
+//! Original code: <https://github.com/rust-lang/futures-rs/tree/master/futures-channel>
 
 #![no_std]
 

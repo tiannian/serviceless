@@ -5,11 +5,13 @@ use std::future::Future;
 
 use crate::{Context, Envelope, ServiceAddress};
 
+/// [`Empty`] stream of [`Envelope`] for [`Context::new`] when there is no extra envelope source.
 pub type EmptyStream<S> = Empty<Envelope<S>>;
 
 /// A service is an running like thread
 #[async_trait]
 pub trait Service: Send + Sized + 'static {
+    /// Extra envelope stream merged with the internal mailbox (see [`Context::with_stream`]).
     type Stream: Stream<Item = Envelope<Self>> + Unpin + Send;
 
     /// Start a service with the given context

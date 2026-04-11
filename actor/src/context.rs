@@ -5,7 +5,7 @@ use futures_util::{
 use service_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use std::future::Future;
 
-use crate::{Envelope, Service, ServiceAddress};
+use crate::{Envelope, Error, Result, RoutedTopic, Service, ServiceAddress, Topic};
 
 /// Context to run service
 pub struct Context<S, T>
@@ -17,6 +17,7 @@ where
 }
 
 impl<S> Default for Context<S, Empty<Envelope<S>>> {
+    /// Equivalent to [`Context::new`].
     fn default() -> Self {
         Self::new()
     }
@@ -53,11 +54,32 @@ where
         }
     }
 
+    /// Publish one item to topic T.
+    ///
+    /// The actual delivery is still serialized through the service mailbox.
+    pub fn publish<TopicT>(&self, item: TopicT::Item) -> Result<()>
+    where
+        TopicT: Topic + RoutedTopic<S>,
+        S: Service,
+    {
+        let env = Envelope::<S>::new_publish_topic::<TopicT>(item);
+
+        self.sender
+            .unbounded_send(env)
+            .map_err(|_| Error::ServiceStoped)?;
+
+        Ok(())
+    }
+
     /// Stop an service
     pub fn stop(&mut self) {
         self.sender.close_channel()
     }
 
+    /// Mutable reference to the extra envelope stream from [`Self::with_stream`].
+    ///
+    /// Incoming mail from [`ServiceAddress`] is merged with this stream internally;
+    /// it is not exposed here—only the user half `T` is.
     pub fn stream(&mut self) -> &mut T {
         let (_, stream) = self.receiver.get_mut();
         stream
