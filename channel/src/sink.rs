@@ -5,7 +5,7 @@
 //! ## Source
 //!
 //! This implementation is derived from the `futures-channel` crate.
-//! Original code: https://github.com/rust-lang/futures-rs/tree/master/futures-channel/src/mpsc
+//! Original code: <https://github.com/rust-lang/futures-rs/tree/master/futures-channel/src/mpsc>
 
 use crate::mpsc::{SendError, TrySendError, UnboundedSender};
 use core::pin::Pin;

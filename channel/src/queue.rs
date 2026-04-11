@@ -11,10 +11,10 @@
 //! ## Source
 //!
 //! This implementation is derived from the `futures-channel` crate.
-//! Original code: https://github.com/rust-lang/futures-rs/tree/master/futures-channel/src/mpsc
+//! Original code: <https://github.com/rust-lang/futures-rs/tree/master/futures-channel/src/mpsc>
 //!
 //! The underlying lock-free algorithm is based on:
-//! http://www.1024cores.net/home/lock-free-algorithms/queues/non-intrusive-mpsc-node-based-queue
+//! <http://www.1024cores.net/home/lock-free-algorithms/queues/non-intrusive-mpsc-node-based-queue>
 
 pub(crate) use self::PopResult::*;
 

@@ -1,106 +1,136 @@
 # Serviceless
 
-Serviceless is an simple actor model in rust, like actix but simple and async.
+Serviceless is a small **async actor** library for Rust, inspired by Actix-style APIs but kept
+minimal: one mailbox per [`Service`], fully async handlers, and addresses for typed messaging plus
+optional **topic** notifications.
 
-Currently, this crate only use tokio as backend.
+The implementation of this crate does not use `unsafe`.
 
-This crate is no unsafe code.
+## Features
+
+- **Async actors** — Each service runs a mailbox loop; `started` / `stopped` hooks and
+  [`Handler::handle`](https://docs.rs/serviceless/latest/serviceless/trait.Handler.html) are
+  `async` (use the [`async_trait`](https://docs.rs/async-trait) crate).
+- **Typed messages** — Implement [`Message`](https://docs.rs/serviceless/latest/serviceless/trait.Message.html)
+  and [`Handler`](https://docs.rs/serviceless/latest/serviceless/trait.Handler.html) for your own
+  types instead of manual routing tables.
+- **`call` and `send`** — [`ServiceAddress::call`](https://docs.rs/serviceless/latest/serviceless/struct.ServiceAddress.html#method.call)
+  awaits `M::Result`; [`send`](https://docs.rs/serviceless/latest/serviceless/struct.ServiceAddress.html#method.send)
+  enqueues work and drops the handler return value.
+- **Topics (pub/sub-style)** — [`Topic`](https://docs.rs/serviceless/latest/serviceless/trait.Topic.html),
+  [`RoutedTopic`](https://docs.rs/serviceless/latest/serviceless/trait.RoutedTopic.html), and
+  [`TopicEndpoint`](https://docs.rs/serviceless/latest/serviceless/struct.TopicEndpoint.html) for
+  one-shot subscribe / publish flows, still serialized through the actor mailbox.
+- **External envelope streams** — [`Context::with_stream`](https://docs.rs/serviceless/latest/serviceless/struct.Context.html#method.with_stream)
+  merges another stream of [`Envelope`](https://docs.rs/serviceless/latest/serviceless/struct.Envelope.html)s
+  with the internal mailbox.
+- **Typed narrowing** — [`ServiceAddress::into_address`](https://docs.rs/serviceless/latest/serviceless/struct.ServiceAddress.html#method.into_address)
+  builds a single-message-type [`Address`](https://docs.rs/serviceless/latest/serviceless/struct.Address.html)
+  plus a forwarding future you spawn next to the main run future.
+- **Bring your own runtime** — The library returns a `run` future; you spawn it (examples use Tokio).
+  There are **no optional Cargo `[features]`** on this crate: the full API is always available.
+
+## Documentation
+
+- Run **`cargo doc --open -p serviceless`** for full API reference.
+- Narrative guide (actor usage, caveats, pub/sub): see the **`serviceless::docs`** module in the
+  generated docs (overview, services, messaging, pub/sub, runtime).
 
 ## Usage
 
-This crate provide API same like `actix`. But all api is async include handler.
-
 ### Service
 
-`Service` is a `Actor` in Actor Model.
-
-We can impl an `Service` on an struct to delcare an `Service`.
-
-```rust
-pub struct Service0 {}
-
-impl Service for Service0 {}
-```
-
-The `Service` provide hook named `started` and `stopped`, them all are async.
-Please use `async_trait` macros.
+A `Service` is your actor type. You must set the associated `Stream` type (often
+[`EmptyStream<Self>`](https://docs.rs/serviceless/latest/serviceless/type.EmptyStream.html) when
+you only use the built-in mailbox).
 
 ```rust
-pub struct Service1 {}
+use async_trait::async_trait;
+use serviceless::{Context, EmptyStream, Service};
+
+#[derive(Default)]
+pub struct MyActor;
 
 #[async_trait]
-impl Service for Service1 {
-    async fn started(&mut self, _ctx: &mut Context<Self>) {
-        println!("Started")
+impl Service for MyActor {
+    type Stream = EmptyStream<Self>;
+
+    async fn started(&mut self, _ctx: &mut Context<Self, Self::Stream>) {
+        // runs once before the mailbox loop
+    }
+
+    async fn stopped(&mut self, _ctx: &mut Context<Self, Self::Stream>) {
+        // runs after the mailbox is closed
     }
 }
 ```
 
-#### Start Service
+### Starting and stopping
 
-Start a service is very simple, only create it and call `start` method.
+Build a [`Context`](https://docs.rs/serviceless/latest/serviceless/struct.Context.html), start the
+service, then **spawn** the returned run future on your async runtime. Until that future is polled,
+mailbox work will not run.
 
 ```rust
-let svc = Service1 {};
-svc.start();
+use serviceless::Context;
+
+# use async_trait::async_trait;
+# use serviceless::{EmptyStream, Service};
+# #[derive(Default)] struct MyActor;
+# #[async_trait] impl Service for MyActor { type Stream = EmptyStream<Self>; }
+
+let actor = MyActor::default();
+let ctx = Context::new();
+let (addr, run) = actor.start_by_context(ctx);
+tokio::spawn(run);
 ```
 
-> Note: this function must call in async function or after async runtime initialized.
-> If not, it will panic.
+Stop from inside the actor with [`Context::stop`](https://docs.rs/serviceless/latest/serviceless/struct.Context.html#method.stop),
+or from outside with
+[`ServiceAddress::close_service`](https://docs.rs/serviceless/latest/serviceless/struct.ServiceAddress.html#method.close_service).
 
-#### Stop
+### Message and handler
 
-When a service started, we can call stop method on `context`.
-
-You can call this function in Service Hook or in Handler.
-
-### Handler and Mesaage
-
-A service can sending an message to other service, or called by other service.
-
-#### Message
-
-To call other Service, we must declare an `Message` first.
-
-Any type can be a message, only need impl Message trait on struct
-and define an result.
+Declare a [`Message`](https://docs.rs/serviceless/latest/serviceless/trait.Message.html) (with
+`type Result`) and implement [`Handler`](https://docs.rs/serviceless/latest/serviceless/trait.Handler.html)
+for your service.
 
 ```rust
-pub struct Messagep {}
+use async_trait::async_trait;
+use serviceless::{Context, EmptyStream, Handler, Message, Service};
 
-pub struct MessageResult {}
+# #[derive(Default)] pub struct Service0;
+# #[async_trait] impl Service for Service0 { type Stream = EmptyStream<Self>; }
 
-impl Message for Message0 {
-    type Result = MessageResult;
+pub struct U8(pub u8);
+
+impl Message for U8 {
+    type Result = U8;
 }
-```
 
-#### Handler
-
-Impl Handler on service, we can make a service accept call from other service.
-
-```rust
 #[async_trait]
 impl Handler<U8> for Service0 {
-    async fn handler(&mut self, message: U8, _ctx: &mut Context<Self>) -> U8 {
+    async fn handle(&mut self, message: U8, _ctx: &mut Context<Self, Self::Stream>) -> U8 {
         U8(message.0 + 2)
     }
 }
 ```
 
-Handler also an async function, please use `async_trait` macros.
+### Address: `call`, `send`, and topics
 
-### Address
+[`ServiceAddress`](https://docs.rs/serviceless/latest/serviceless/struct.ServiceAddress.html) is
+cloneable and is how other tasks talk to the actor.
 
-When we start an service, we can get an address. We also can get it from Context.
+- **`call`** — `async`; waits for `M::Result`. If the service has stopped, you get
+  [`Error::ServiceStoped`](https://docs.rs/serviceless/latest/serviceless/enum.Error.html#variant.ServiceStoped).
+- **`send`** — synchronous for the caller; still returns `Result` and drops the handler return value.
+- **`subscribe`** — `async`; registers for the next topic publication (see `serviceless::docs::pubsub`
+  and `examples/topic.rs`).
 
-#### Call and Send
+## Examples
 
-The address can make call or send.
+Runnable examples live under `actor/examples/` (e.g. `topic.rs`, `single.rs`, `external_stream.rs`).
 
-- Call means caller want to known the result.
-  1. This is an async function
-  2. When an service stop, caller will get `ServiceStopped` from Error.
-- Send means caller don't care the result, so
-  1. This is an plain function
-  2. When an service stop, caller will get `ServiceStopped` from Error.
+```bash
+cargo run -p serviceless --example topic
+```
