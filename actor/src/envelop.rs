@@ -111,7 +111,7 @@ where
 #[async_trait]
 impl<S, M> EnvelopProxy<S> for EnvelopWithMessage<M>
 where
-    M: Message + Send,
+    M: Message + Send + 'static,
     S: Handler<M> + Send,
     M::Result: Send,
 {
@@ -120,6 +120,13 @@ where
         let result_channel = self.result_channel;
 
         if M::IS_PERFERRED {
+            if let Some(rc) = result_channel {
+                let handle = ReplyHandle::new(rc);
+                <S as Handler<M>>::handle_preferred(svc, message, ctx, handle).await;
+            } else {
+                let _ = <S as Handler<M>>::handle(svc, message, ctx).await;
+            }
+        } else {
             let res = <S as Handler<M>>::handle(svc, message, ctx).await;
 
             if let Some(rc) = result_channel {
@@ -127,9 +134,6 @@ where
                     log::warn!("Channel Closed");
                 }
             }
-        } else {
-            let handle = ReplyHandle::new(result_channel.unwrap());
-            <S as Handler<M>>::handle_preferred(svc, message, ctx, handle).await;
         }
     }
 }
