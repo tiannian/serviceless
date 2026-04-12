@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use service_channel::oneshot;
 
-use crate::{Context, Handler, Message, RoutedTopic, Service, Topic};
+use crate::{Context, Handler, Message, ReplyHandle, RoutedTopic, Service, Topic};
 
 /// Type-erased mailbox item for service `S`: a typed message dispatch or a topic operation.
 ///
@@ -111,7 +111,7 @@ where
 #[async_trait]
 impl<S, M> EnvelopProxy<S> for EnvelopWithMessage<M>
 where
-    M: Message + Send,
+    M: Message + Send + 'static,
     S: Handler<M> + Send,
     M::Result: Send,
 {
@@ -119,11 +119,20 @@ where
         let message = self.message;
         let result_channel = self.result_channel;
 
-        let res = <S as Handler<M>>::handle(svc, message, ctx).await;
+        if M::IS_PERFERRED {
+            if let Some(rc) = result_channel {
+                let handle = ReplyHandle::new(rc);
+                <S as Handler<M>>::handle_preferred(svc, message, ctx, handle).await;
+            } else {
+                let _ = <S as Handler<M>>::handle(svc, message, ctx).await;
+            }
+        } else {
+            let res = <S as Handler<M>>::handle(svc, message, ctx).await;
 
-        if let Some(rc) = result_channel {
-            if rc.send(res).is_err() {
-                log::warn!("Channel Closed");
+            if let Some(rc) = result_channel {
+                if rc.send(res).is_err() {
+                    log::warn!("Channel Closed");
+                }
             }
         }
     }
