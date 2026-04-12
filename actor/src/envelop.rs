@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use service_channel::oneshot;
 
-use crate::{Context, Handler, Message, RoutedTopic, Service, Topic};
+use crate::{Context, Handler, Message, ReplyHandle, RoutedTopic, Service, Topic};
 
 /// Type-erased mailbox item for service `S`: a typed message dispatch or a topic operation.
 ///
@@ -119,12 +119,17 @@ where
         let message = self.message;
         let result_channel = self.result_channel;
 
-        let res = <S as Handler<M>>::handle(svc, message, ctx).await;
+        if M::IS_PERFERRED {
+            let res = <S as Handler<M>>::handle(svc, message, ctx).await;
 
-        if let Some(rc) = result_channel {
-            if rc.send(res).is_err() {
-                log::warn!("Channel Closed");
+            if let Some(rc) = result_channel {
+                if rc.send(res).is_err() {
+                    log::warn!("Channel Closed");
+                }
             }
+        } else {
+            let handle = ReplyHandle::new(result_channel.unwrap());
+            <S as Handler<M>>::handle_preferred(svc, message, ctx, handle).await;
         }
     }
 }
