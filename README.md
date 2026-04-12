@@ -126,12 +126,19 @@ cloneable and is how other tasks talk to the actor.
 - **`call`** — `async`; waits for `M::Result`. If the service has stopped, you get
   [`Error::ServiceStoped`](https://docs.rs/serviceless/latest/serviceless/enum.Error.html#variant.ServiceStoped).
 - **`send`** — synchronous for the caller; still returns `Result` and drops the handler return value.
+- **Preferred dispatch** — set `Message::IS_PERFERRED = true` when a `call` should route through
+  [`Handler::handle_preferred`](https://docs.rs/serviceless/latest/serviceless/trait.Handler.html#method.handle_preferred)
+  (e.g. to use [`ReplyHandle`](https://docs.rs/serviceless/latest/serviceless/struct.ReplyHandle.html)
+  manually). `send` continues to route through `handle` because it has no reply channel.
+  `handle_preferred` can spawn a task and reply later so the current handler path does not block
+  mailbox progress (see `actor/examples/preferred.rs`).
 - **`subscribe`** — `async`; registers for the next topic publication (see `serviceless::docs::pubsub`
   and `examples/topic.rs`).
 
 ## Examples
 
-Runnable examples live under `actor/examples/` (e.g. `topic.rs`, `single.rs`, `external_stream.rs`).
+Runnable examples live under `actor/examples/` (e.g. `topic.rs`, `single.rs`, `external_stream.rs`,
+`preferred.rs`).
 
 ```bash
 cargo run -p serviceless --example topic

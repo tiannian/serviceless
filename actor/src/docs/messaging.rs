@@ -45,9 +45,65 @@
 //! - **`send`** — Enqueues the same handler path but **drops** the result. Synchronous for the
 //!   caller; still subject to mailbox ordering and backpressure characteristics of the
 //!   unbounded channel.
+//! - **Preferred dispatch** — If a message sets `Message::IS_PERFERRED = true`, `call` dispatches
+//!   through [`crate::Handler::handle_preferred`] (so custom reply behavior can use
+//!   [`crate::ReplyHandle`]). `send` still uses [`crate::Handler::handle`] because there is no
+//!   reply channel to drive.
 //!
 //! Use `send` when no return value is needed; use `call` when the caller must observe completion
 //! or a computed value.
+//!
+//! ## Implementing `handle_preferred` for non-blocking replies
+//!
+//! When `Message::IS_PERFERRED = true`, you can override
+//! [`crate::Handler::handle_preferred`] and spawn a background task to produce the reply later.
+//! This keeps the actor mailbox moving instead of waiting inside `handle`.
+//!
+//! See also: `actor/examples/preferred.rs`.
+//!
+//! ```rust,no_run
+//! use async_trait::async_trait;
+//! use std::time::Duration;
+//! use tokio::time::sleep;
+//! use serviceless::{Context, EmptyStream, Handler, Message, ReplyHandle, Service};
+//!
+//! #[derive(Default)]
+//! struct Worker;
+//!
+//! #[async_trait]
+//! impl Service for Worker {
+//!     type Stream = EmptyStream<Self>;
+//! }
+//!
+//! struct SlowDouble(pub u32);
+//! impl Message for SlowDouble {
+//!     const IS_PERFERRED: bool = true;
+//!     type Result = u32;
+//! }
+//!
+//! #[async_trait]
+//! impl Handler<SlowDouble> for Worker {
+//!     async fn handle(
+//!         &mut self,
+//!         msg: SlowDouble,
+//!         _ctx: &mut Context<Self, Self::Stream>,
+//!     ) -> u32 {
+//!         msg.0 * 2
+//!     }
+//!
+//!     async fn handle_preferred(
+//!         &mut self,
+//!         msg: SlowDouble,
+//!         _ctx: &mut Context<Self, Self::Stream>,
+//!         handle: ReplyHandle<SlowDouble>,
+//!     ) {
+//!         tokio::spawn(async move {
+//!             sleep(Duration::from_millis(100)).await;
+//!             let _ = handle.send(msg.0 * 2);
+//!         });
+//!     }
+//! }
+//! ```
 //!
 //! ```rust,no_run
 //! use async_trait::async_trait;
