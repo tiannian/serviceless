@@ -50,11 +50,7 @@ where
     {
         let (sender, receiver) = oneshot::channel::<M::Result>();
 
-        let env = if M::IS_PERFERRED {
-            Envelope::new_with_result_channel(message, Some(sender))
-        } else {
-            Envelope::new_with_result_channel(message, Some(sender))
-        };
+        let env = Envelope::new_with_result_channel(message, Some(sender));
 
         self.sender
             .unbounded_send(env)

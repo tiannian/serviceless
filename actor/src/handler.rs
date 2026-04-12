@@ -18,7 +18,10 @@ where
         message: M,
         ctx: &mut Context<Self, Self::Stream>,
         handle: ReplyHandle<M>,
-    ) {
+    ) where
+        M: Send + 'static,
+        M::Result: Send,
+    {
         let res = self.handle(message, ctx).await;
         let _ = handle.send(res);
     }
