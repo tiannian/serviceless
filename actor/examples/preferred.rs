@@ -46,7 +46,11 @@ impl Handler<SlowDouble> for PreferredService {
 
 #[async_trait]
 impl Handler<Ping> for PreferredService {
-    async fn handle(&mut self, _message: Ping, _ctx: &mut Context<Self, Self::Stream>) -> &'static str {
+    async fn handle(
+        &mut self,
+        _message: Ping,
+        _ctx: &mut Context<Self, Self::Stream>,
+    ) -> &'static str {
         "pong"
     }
 }
