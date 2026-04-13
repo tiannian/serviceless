@@ -36,22 +36,22 @@ impl<S> Envelope<S> {
         Self(Box::new(EnvelopWithMessage::new(message, result_channel)))
     }
 
-    /// Register a one-shot subscriber for topic T.
-    pub fn new_subscribe_topic<T>(result_channel: oneshot::Sender<T::Item>) -> Self
+    /// Register a one-shot subscriber for a specific topic value.
+    pub fn new_subscribe_topic<T>(topic: T, result_channel: oneshot::Sender<T::Item>) -> Self
     where
         S: Service + Send,
         T: Topic + RoutedTopic<S>,
     {
-        Self(Box::new(SubscribeTopicEnvelope::<T>::new(result_channel)))
+        Self(Box::new(SubscribeTopicEnvelope::<T>::new(topic, result_channel)))
     }
 
-    /// Publish one item to topic T.
-    pub fn new_publish_topic<T>(item: T::Item) -> Self
+    /// Publish one item to a specific topic value.
+    pub fn new_publish_topic<T>(topic: T, item: T::Item) -> Self
     where
         S: Service + Send,
         T: Topic + RoutedTopic<S>,
     {
-        Self(Box::new(PublishTopicEnvelope::<T>::new(item)))
+        Self(Box::new(PublishTopicEnvelope::<T>::new(topic, item)))
     }
 
     /// Create an Envelope from a boxed EnvelopWithMessage without re-boxing
@@ -142,16 +142,18 @@ pub(crate) struct SubscribeTopicEnvelope<T>
 where
     T: Topic,
 {
-    result_channel: Option<oneshot::Sender<T::Item>>,
+    topic: T,
+    result_channel: oneshot::Sender<T::Item>,
 }
 
 impl<T> SubscribeTopicEnvelope<T>
 where
     T: Topic,
 {
-    pub(crate) fn new(result_channel: oneshot::Sender<T::Item>) -> Self {
+    pub(crate) fn new(topic: T, result_channel: oneshot::Sender<T::Item>) -> Self {
         Self {
-            result_channel: Some(result_channel),
+            topic,
+            result_channel,
         }
     }
 }
@@ -162,10 +164,12 @@ where
     S: Service + Send,
     T: Topic + RoutedTopic<S>,
 {
-    async fn handle(mut self: Box<Self>, svc: &mut S, _ctx: &mut Context<S, S::Stream>) {
-        if let Some(tx) = self.result_channel.take() {
-            T::endpoint(svc).subscribe(tx);
-        }
+    async fn handle(self: Box<Self>, svc: &mut S, _ctx: &mut Context<S, S::Stream>) {
+        let Self {
+            topic,
+            result_channel,
+        } = *self;
+        T::endpoint(svc).subscribe(topic, result_channel);
     }
 }
 
@@ -173,15 +177,16 @@ pub(crate) struct PublishTopicEnvelope<T>
 where
     T: Topic,
 {
-    item: Option<T::Item>,
+    topic: T,
+    item: T::Item,
 }
 
 impl<T> PublishTopicEnvelope<T>
 where
     T: Topic,
 {
-    pub(crate) fn new(item: T::Item) -> Self {
-        Self { item: Some(item) }
+    pub(crate) fn new(topic: T, item: T::Item) -> Self {
+        Self { topic, item }
     }
 }
 
@@ -191,9 +196,8 @@ where
     S: Service + Send,
     T: Topic + RoutedTopic<S>,
 {
-    async fn handle(mut self: Box<Self>, svc: &mut S, _ctx: &mut Context<S, S::Stream>) {
-        if let Some(item) = self.item.take() {
-            T::endpoint(svc).publish(item);
-        }
+    async fn handle(self: Box<Self>, svc: &mut S, _ctx: &mut Context<S, S::Stream>) {
+        let Self { topic, item } = *self;
+        T::endpoint(svc).publish(&topic, item);
     }
 }

@@ -4,7 +4,8 @@ use serviceless::{Context, Handler, RoutedTopic, Service, ServiceAddress, Topic,
 #[derive(Clone)]
 pub struct UserReady(pub String);
 
-pub struct UserReadyTopic;
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct UserReadyTopic(pub String);
 
 impl Topic for UserReadyTopic {
     type Item = UserReady;
@@ -35,12 +36,15 @@ impl serviceless::Message for DoWork {
 #[async_trait]
 impl Handler<DoWork> for MyService {
     async fn handle(&mut self, _message: DoWork, ctx: &mut Context<Self, Self::Stream>) {
-        let _ = ctx.publish::<UserReadyTopic>(UserReady("done".to_string()));
+        let _ = ctx.publish::<UserReadyTopic>(
+            UserReadyTopic("user-42".to_string()),
+            UserReady("done".to_string()),
+        );
     }
 }
 
 async fn demo(addr: ServiceAddress<MyService>) {
-    let fut = addr.subscribe::<UserReadyTopic>();
+    let fut = addr.subscribe::<UserReadyTopic>(UserReadyTopic("user-42".to_string()));
     let _ = addr.send(DoWork);
     let event = fut.await.unwrap();
     assert_eq!(event.0, "done");

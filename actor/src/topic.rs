@@ -1,7 +1,8 @@
 use service_channel::oneshot;
+use std::collections::BTreeMap;
 
 /// A typed pub/sub topic.
-pub trait Topic: Send + 'static {
+pub trait Topic: Ord + Clone + Send + 'static {
     type Item: Clone + Send + 'static;
 }
 
@@ -31,7 +32,7 @@ pub struct TopicEndpoint<T>
 where
     T: Topic,
 {
-    waiters: Vec<oneshot::Sender<T::Item>>,
+    waiters: BTreeMap<T, Vec<oneshot::Sender<T::Item>>>,
 }
 
 impl<T> Default for TopicEndpoint<T>
@@ -41,7 +42,7 @@ where
     /// Empty endpoint with no waiters.
     fn default() -> Self {
         Self {
-            waiters: Vec::new(),
+            waiters: BTreeMap::new(),
         }
     }
 }
@@ -51,24 +52,29 @@ where
     T: Topic,
 {
     /// Register one subscriber waiting for the next publication.
-    pub fn subscribe(&mut self, tx: oneshot::Sender<T::Item>) {
-        self.waiters.push(tx);
+    pub fn subscribe(&mut self, topic: T, tx: oneshot::Sender<T::Item>) {
+        self.waiters.entry(topic).or_default().push(tx);
     }
 
     /// Publish once to all current subscribers, then clear them.
     ///
     /// Subscribers that already dropped are silently skipped.
-    pub fn publish(&mut self, item: T::Item) {
-        let waiters = std::mem::take(&mut self.waiters);
+    pub fn publish(&mut self, topic: &T, item: T::Item) {
+        let waiters = self.waiters.remove(topic).unwrap_or_default();
 
         for tx in waiters {
             let _ = tx.send(item.clone());
         }
     }
 
-    /// Number of registered one-shot subscribers waiting for the next publish.
-    pub fn len(&self) -> usize {
+    /// Number of topic values that currently have at least one waiter.
+    pub fn topic_len(&self) -> usize {
         self.waiters.len()
+    }
+
+    /// Number of registered one-shot subscribers waiting for the next publish on `topic`.
+    pub fn len(&self, topic: &T) -> usize {
+        self.waiters.get(topic).map_or(0, Vec::len)
     }
 
     /// Returns `true` when there are no pending subscribers.
@@ -76,10 +82,20 @@ where
         self.waiters.is_empty()
     }
 
+    /// Returns `true` when there are no pending subscribers on `topic`.
+    pub fn is_topic_empty(&self, topic: &T) -> bool {
+        self.waiters.get(topic).map_or(true, Vec::is_empty)
+    }
+
     /// Remove all pending subscribers without publishing.
     ///
     /// Dropped [`oneshot::Sender`]s cause the corresponding receivers to see a closed channel.
     pub fn clear(&mut self) {
         self.waiters.clear();
+    }
+
+    /// Remove all pending subscribers for a specific topic value.
+    pub fn clear_topic(&mut self, topic: &T) {
+        self.waiters.remove(topic);
     }
 }
