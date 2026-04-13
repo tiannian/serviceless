@@ -84,7 +84,7 @@ where
 
     /// Returns `true` when there are no pending subscribers on `topic`.
     pub fn is_topic_empty(&self, topic: &T) -> bool {
-        self.waiters.get(topic).map_or(true, Vec::is_empty)
+        self.waiters.get(topic).is_none_or(Vec::is_empty)
     }
 
     /// Remove all pending subscribers without publishing.

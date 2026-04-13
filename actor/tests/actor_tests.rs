@@ -40,7 +40,6 @@ impl Handler<Get> for TestActor {
     }
 }
 
-
 struct PreferredUsed;
 impl Message for PreferredUsed {
     type Result = bool;
@@ -48,7 +47,11 @@ impl Message for PreferredUsed {
 
 #[async_trait]
 impl Handler<PreferredUsed> for TestActor {
-    async fn handle(&mut self, _msg: PreferredUsed, _ctx: &mut Context<Self, Self::Stream>) -> bool {
+    async fn handle(
+        &mut self,
+        _msg: PreferredUsed,
+        _ctx: &mut Context<Self, Self::Stream>,
+    ) -> bool {
         self.preferred_used
     }
 }
@@ -157,7 +160,10 @@ async fn into_address_forwards_messages_to_service() {
     let (typed_addr, forward) = addr.clone().into_address::<Add>();
     let forwarder = tokio::spawn(forward);
 
-    let v = typed_addr.call(Add(4)).await.expect("typed call should succeed");
+    let v = typed_addr
+        .call(Add(4))
+        .await
+        .expect("typed call should succeed");
     assert_eq!(v, 4);
 
     let state = addr.call(Get).await.expect("get should succeed");

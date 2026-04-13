@@ -42,7 +42,10 @@ impl<S> Envelope<S> {
         S: Service + Send,
         T: Topic + RoutedTopic<S>,
     {
-        Self(Box::new(SubscribeTopicEnvelope::<T>::new(topic, result_channel)))
+        Self(Box::new(SubscribeTopicEnvelope::<T>::new(
+            topic,
+            result_channel,
+        )))
     }
 
     /// Publish one item to a specific topic value.

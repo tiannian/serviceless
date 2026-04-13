@@ -767,7 +767,6 @@ mod tests {
     use alloc::format;
     use alloc::string::{String, ToString};
     use alloc::vec;
-    use alloc::vec::Vec;
 
     #[test]
     fn test_basic_send_recv() {
@@ -798,9 +797,7 @@ mod tests {
         tx1.unbounded_send(1).unwrap();
         tx2.unbounded_send(2).unwrap();
 
-        let mut received = Vec::new();
-        received.push(rx.try_recv().unwrap());
-        received.push(rx.try_recv().unwrap());
+        let mut received = vec![rx.try_recv().unwrap(), rx.try_recv().unwrap()];
         received.sort();
         assert_eq!(received, vec![1, 2]);
     }
@@ -1042,9 +1039,7 @@ mod tests {
         tx1.unbounded_send(1).unwrap();
         tx2.unbounded_send(2).unwrap();
 
-        let mut received = Vec::new();
-        received.push(rx.try_recv().unwrap());
-        received.push(rx.try_recv().unwrap());
+        let mut received = vec![rx.try_recv().unwrap(), rx.try_recv().unwrap()];
         received.sort();
         assert_eq!(received, vec![1, 2]);
     }
