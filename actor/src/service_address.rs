@@ -77,15 +77,15 @@ where
         Ok(())
     }
 
-    /// Subscribe once to topic T.
+    /// Subscribe once to a specific topic value.
     ///
     /// One call waits for one future publication.
-    pub async fn subscribe<T>(&self) -> Result<T::Item>
+    pub async fn subscribe<T>(&self, topic: T) -> Result<T::Item>
     where
         T: Topic + RoutedTopic<S>,
     {
         let (sender, receiver) = oneshot::channel::<T::Item>();
-        let env = Envelope::<S>::new_subscribe_topic::<T>(sender);
+        let env = Envelope::<S>::new_subscribe_topic::<T>(topic, sender);
 
         self.sender
             .unbounded_send(env)

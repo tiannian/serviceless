@@ -54,15 +54,15 @@ where
         }
     }
 
-    /// Publish one item to topic T.
+    /// Publish one item to a specific topic value.
     ///
     /// The actual delivery is still serialized through the service mailbox.
-    pub fn publish<TopicT>(&self, item: TopicT::Item) -> Result<()>
+    pub fn publish<TopicT>(&self, topic: TopicT, item: TopicT::Item) -> Result<()>
     where
         TopicT: Topic + RoutedTopic<S>,
         S: Service,
     {
-        let env = Envelope::<S>::new_publish_topic::<TopicT>(item);
+        let env = Envelope::<S>::new_publish_topic::<TopicT>(topic, item);
 
         self.sender
             .unbounded_send(env)

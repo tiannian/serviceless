@@ -23,7 +23,8 @@
 //! #[derive(Clone)]
 //! pub struct UserReady(pub String);
 //!
-//! pub struct UserReadyTopic;
+//! #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+//! pub struct UserReadyTopic(pub String);
 //!
 //! impl Topic for UserReadyTopic {
 //!     type Item = UserReady;
@@ -54,7 +55,7 @@
 //! #[async_trait]
 //! impl Handler<DoWork> for MyService {
 //!     async fn handle(&mut self, _message: DoWork, ctx: &mut Context<Self, Self::Stream>) {
-//!         let _ = ctx.publish::<UserReadyTopic>(UserReady("done".into()));
+//!         let _ = ctx.publish::<UserReadyTopic>(UserReadyTopic("user-42".into()), UserReady("done".into()));
 //!     }
 //! }
 //!
@@ -65,7 +66,7 @@
 //!     tokio::spawn(run);
 //!
 //!     // Same enqueue/await pattern as `examples/topic.rs` (ordering vs. publish is discussed above).
-//!     let ready = addr.subscribe::<UserReadyTopic>();
+//!     let ready = addr.subscribe::<UserReadyTopic>(UserReadyTopic("user-42".into()));
 //!     addr.send(DoWork).expect("send work");
 //!     let event = ready.await.expect("event");
 //!     assert_eq!(event.0, "done");
@@ -75,16 +76,18 @@
 //! ## Publishing
 //!
 //! - **Inside the actor** (common): [`crate::Context::publish`] enqueues a publish envelope. When
-//!   it is processed, [`crate::TopicEndpoint::publish`] runs and wakes every waiter registered at
-//!   that moment, then **clears** the waiter list.
+//!   it is processed, [`crate::TopicEndpoint::publish`] runs and wakes every waiter registered for
+//!   that topic value at that moment, then **clears that value's waiter list**.
 //! - Publishing is therefore a **one-shot fan-out**: each `subscribe` waits for **one** future
-//!   publish; after a publish, subscribers must `subscribe` again to receive another item.
+//!   publish on a specific topic value; after a publish, subscribers must `subscribe` again to
+//!   receive another item for that value.
 //!
 //! ## Subscribing
 //!
 //! - **From outside:** [`crate::ServiceAddress::subscribe`] sends a subscribe envelope; when it
-//!   runs, it registers the caller’s one-shot channel on the endpoint. Await the future to obtain
-//!   the next published `Item` (or [`crate::Error::ServiceStoped`] if the actor stops).
+//!   runs, it registers the caller’s one-shot channel on the endpoint for the provided topic value. Await
+//!   the future to obtain the next published `Item` for that value (or
+//!   [`crate::Error::ServiceStoped`] if the actor stops).
 //!
 //! ## Caveats and patterns
 //!
