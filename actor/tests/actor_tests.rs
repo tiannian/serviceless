@@ -108,7 +108,7 @@ impl Message for PublishNumber {
 #[async_trait]
 impl Handler<PublishNumber> for TestActor {
     async fn handle(&mut self, msg: PublishNumber, ctx: &mut Context<Self, Self::Stream>) {
-        let _ = ctx.publish(msg.topic, msg.value);
+        let _ = ctx.publish_handle().publish(msg.topic, msg.value);
     }
 }
 

@@ -54,21 +54,14 @@ where
         }
     }
 
-    /// Publish one item to a specific topic value.
-    ///
-    /// The actual delivery is still serialized through the service mailbox.
-    pub fn publish<TopicT>(&self, topic: TopicT, item: TopicT::Item) -> Result<()>
+    /// Get a publish handle
+    pub fn publish_handle(&self) -> PublishHandle<S>
     where
-        TopicT: Topic + RoutedTopic<S>,
         S: Service,
     {
-        let env = Envelope::<S>::new_publish_topic::<TopicT>(topic, item);
-
-        self.sender
-            .unbounded_send(env)
-            .map_err(|_| Error::ServiceStoped)?;
-
-        Ok(())
+        PublishHandle {
+            sender: self.sender.clone(),
+        }
     }
 
     /// Stop an service
@@ -111,5 +104,34 @@ where
         };
 
         (address, future)
+    }
+}
+
+pub struct PublishHandle<S>
+where
+    S: Service,
+{
+    pub(crate) sender: UnboundedSender<Envelope<S>>,
+}
+
+impl<S> PublishHandle<S>
+where
+    S: Service,
+{
+    /// Publish one item to a specific topic value.
+    ///
+    /// The actual delivery is still serialized through the service mailbox.
+    pub fn publish<TopicT>(&self, topic: TopicT, item: TopicT::Item) -> Result<()>
+    where
+        TopicT: Topic + RoutedTopic<S>,
+        S: Service,
+    {
+        let env = Envelope::<S>::new_publish_topic::<TopicT>(topic, item);
+
+        self.sender
+            .unbounded_send(env)
+            .map_err(|_| Error::ServiceStoped)?;
+
+        Ok(())
     }
 }

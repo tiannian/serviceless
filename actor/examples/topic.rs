@@ -36,7 +36,7 @@ impl serviceless::Message for DoWork {
 #[async_trait]
 impl Handler<DoWork> for MyService {
     async fn handle(&mut self, _message: DoWork, ctx: &mut Context<Self, Self::Stream>) {
-        let _ = ctx.publish::<UserReadyTopic>(
+        let _ = ctx.publish_handle().publish(
             UserReadyTopic("user-42".to_string()),
             UserReady("done".to_string()),
         );
