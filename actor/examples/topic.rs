@@ -44,9 +44,11 @@ impl Handler<DoWork> for MyService {
 }
 
 async fn demo(addr: ServiceAddress<MyService>) {
-    let fut = addr.subscribe::<UserReadyTopic>(UserReadyTopic("user-42".to_string()));
+    let fut = addr
+        .subscribe::<UserReadyTopic>(UserReadyTopic("user-42".to_string()))
+        .expect("subscribe should enqueue");
     let _ = addr.send(DoWork);
-    let event = fut.await.unwrap();
+    let event = fut.await.expect("topic item");
     assert_eq!(event.0, "done");
 }
 

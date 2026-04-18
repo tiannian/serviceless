@@ -66,7 +66,9 @@
 //!     tokio::spawn(run);
 //!
 //!     // Same enqueue/await pattern as `examples/topic.rs` (ordering vs. publish is discussed above).
-//!     let ready = addr.subscribe::<UserReadyTopic>(UserReadyTopic("user-42".into()));
+//!     let ready = addr
+//!         .subscribe::<UserReadyTopic>(UserReadyTopic("user-42".into()))
+//!         .expect("subscribe should enqueue");
 //!     addr.send(DoWork).expect("send work");
 //!     let event = ready.await.expect("event");
 //!     assert_eq!(event.0, "done");
@@ -84,10 +86,11 @@
 //!
 //! ## Subscribing
 //!
-//! - **From outside:** [`crate::ServiceAddress::subscribe`] sends a subscribe envelope; when it
-//!   runs, it registers the caller’s one-shot channel on the endpoint for the provided topic value. Await
-//!   the future to obtain the next published `Item` for that value (or
-//!   [`crate::Error::ServiceStoped`] if the actor stops).
+//! - **From outside:** [`crate::ServiceAddress::subscribe`] takes the **topic key** (same value you
+//!   pass to [`crate::Context::publish`]), enqueues a subscribe envelope, and returns
+//!   `Result<impl Future<Output = Result<Item>>>`. The outer [`crate::Result`] is `Err` when the
+//!   mailbox is already closed; the inner future resolves to the next published `Item` for that key,
+//!   or [`crate::Error::ServiceStoped`] if the actor stops before delivery.
 //!
 //! ## Caveats and patterns
 //!
@@ -95,7 +98,8 @@
 //!   message that publishes and **also** `subscribe` from another task without ordering guarantees,
 //!   you can race: the publish envelope might be processed before the subscribe envelope. When
 //!   you need a strict “subscribe then publish” handshake, **sequence** those operations (e.g.
-//!   await `subscribe` first, or perform both from the same actor/handler).
+//!   call `subscribe` and await its returned future before relying on a concurrent publish, or perform
+//!   both from the same actor/handler).
 //! - **Missed events:** there is **no** buffer of past publications for late subscribers—only
 //!   waiters registered at publish time receive the item.
 //! - **Cleanup:** [`crate::TopicEndpoint::clear`] drops pending waiters (their receivers observe a

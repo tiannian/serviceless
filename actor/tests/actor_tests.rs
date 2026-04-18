@@ -185,6 +185,7 @@ async fn subscribe_receives_published_topic_item() {
     let subscriber = tokio::spawn(async move {
         sub_addr
             .subscribe(NumberTopic::Even)
+            .expect("subscribe should enqueue")
             .await
             .expect("subscribe should receive published value")
     });

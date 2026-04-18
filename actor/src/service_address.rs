@@ -1,4 +1,4 @@
-use futures_util::StreamExt;
+use futures_util::{StreamExt, TryFutureExt};
 use service_channel::mpsc::{unbounded, UnboundedSender};
 use service_channel::oneshot;
 use std::future::Future;
@@ -80,7 +80,7 @@ where
     /// Subscribe once to a specific topic value.
     ///
     /// One call waits for one future publication.
-    pub async fn subscribe<T>(&self, topic: T) -> Result<T::Item>
+    pub fn subscribe<T>(&self, topic: T) -> Result<impl Future<Output = Result<T::Item>> + Send>
     where
         T: Topic + RoutedTopic<S>,
     {
@@ -91,7 +91,7 @@ where
             .unbounded_send(env)
             .map_err(|_| Error::ServiceStoped)?;
 
-        receiver.await.map_err(|_| Error::ServiceStoped)
+        Ok(receiver.map_err(|_| Error::ServiceStoped))
     }
 
     /// Convert ServiceAddress to Address for a specific message type

@@ -132,8 +132,9 @@ cloneable and is how other tasks talk to the actor.
   manually). `send` continues to route through `handle` because it has no reply channel.
   `handle_preferred` can spawn a task and reply later so the current handler path does not block
   mailbox progress (see `actor/examples/preferred.rs`).
-- **`subscribe`** — `async`; registers for the next topic publication (see `serviceless::docs::pubsub`
-  and `examples/topic.rs`).
+- **`subscribe`** — synchronous enqueue with a **topic key** argument; returns `Result` of a
+  `Future` you await for the next matching publication (see `serviceless::docs::pubsub` and
+  `examples/topic.rs`).
 
 ## Examples
 

@@ -33,7 +33,8 @@
 //! 3. Build a [`Context`], call [`Service::start_by_context`], then **spawn** the returned
 //!    future on your async runtime.
 //! 4. Use the returned [`ServiceAddress`] for [`ServiceAddress::call`], [`ServiceAddress::send`],
-//!    and optionally [`ServiceAddress::subscribe`] for topics.
+//!    and optionally [`ServiceAddress::subscribe`] (topic key + `Result` of a one-shot future) for
+//!    topics.
 //!
 //! ```rust,no_run
 //! use async_trait::async_trait;
