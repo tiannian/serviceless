@@ -1,6 +1,6 @@
 [package]
 name = "serviceless"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 description = "An simple actor model in rust, like actix"
 license = "MIT"
@@ -12,7 +12,7 @@ readme = "../README.md"
 async-trait = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
-service-channel = { path = "../channel", version = "^0.1.1" }
+service-channel = { path = "../channel", version = "^0.1.2" }
 futures-util = { workspace = true }
 futures-core = { workspace = true }
 
