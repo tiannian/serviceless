@@ -13,8 +13,8 @@
 //!   of manual routing for your own message types.
 //! - **`call` and `send`** — [`ServiceAddress::call`] awaits `M::Result`; [`ServiceAddress::send`]
 //!   enqueues work and drops the handler return value.
-//! - **Preferred call path** — Set [`Message::IS_PERFERRED`] to dispatch [`ServiceAddress::call`]
-//!   via [`Handler::handle_preferred`] and [`ReplyHandle`] when you need custom reply timing.
+//! - **Preferred call path** — Override [`Handler::handle_preferred`] and use [`ReplyHandle`]
+//!   when you need custom reply timing.
 //! - **Topics (pub/sub-style)** — [`Topic`], [`RoutedTopic`], and [`TopicEndpoint`] for one-shot
 //!   subscribe / publish flows still serialized through the actor mailbox.
 //! - **External envelope streams** — [`Context::with_stream`] merges another [`futures_core::Stream`]

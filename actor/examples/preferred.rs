@@ -15,7 +15,6 @@ impl Service for PreferredService {
 struct SlowDouble(pub u32);
 
 impl Message for SlowDouble {
-    const IS_PERFERRED: bool = true;
     type Result = u32;
 }
 

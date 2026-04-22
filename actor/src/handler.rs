@@ -29,8 +29,6 @@ where
 
 /// Message
 pub trait Message {
-    const IS_PERFERRED: bool = false;
-
     /// Result of message
     type Result;
 }

@@ -126,12 +126,12 @@ cloneable and is how other tasks talk to the actor.
 - **`call`** — `async`; waits for `M::Result`. If the service has stopped, you get
   [`Error::ServiceStoped`](https://docs.rs/serviceless/latest/serviceless/enum.Error.html#variant.ServiceStoped).
 - **`send`** — synchronous for the caller; still returns `Result` and drops the handler return value.
-- **Preferred dispatch** — set `Message::IS_PERFERRED = true` when a `call` should route through
-  [`Handler::handle_preferred`](https://docs.rs/serviceless/latest/serviceless/trait.Handler.html#method.handle_preferred)
-  (e.g. to use [`ReplyHandle`](https://docs.rs/serviceless/latest/serviceless/struct.ReplyHandle.html)
-  manually). `send` continues to route through `handle` because it has no reply channel.
-  `handle_preferred` can spawn a task and reply later so the current handler path does not block
-  mailbox progress (see `actor/examples/preferred.rs`).
+- **Preferred dispatch** — `call` and `send` dispatch through
+  [`Handler::handle_preferred`](https://docs.rs/serviceless/latest/serviceless/trait.Handler.html#method.handle_preferred).
+  The default `handle_preferred` implementation calls `handle`, then uses
+  [`ReplyHandle`](https://docs.rs/serviceless/latest/serviceless/struct.ReplyHandle.html) for replies.
+  You can override `handle_preferred` to spawn a task and reply later so the current handler path
+  does not block mailbox progress (see `actor/examples/preferred.rs`).
 - **`subscribe`** — synchronous enqueue with a **topic key** argument; returns `Result` of a
   `Future` you await for the next matching publication (see `serviceless::docs::pubsub` and
   `examples/topic.rs`).

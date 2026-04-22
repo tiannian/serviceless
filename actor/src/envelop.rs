@@ -122,22 +122,8 @@ where
         let message = self.message;
         let result_channel = self.result_channel;
 
-        if M::IS_PERFERRED {
-            if let Some(rc) = result_channel {
-                let handle = ReplyHandle::new(rc);
-                <S as Handler<M>>::handle_preferred(svc, message, ctx, handle).await;
-            } else {
-                let _ = <S as Handler<M>>::handle(svc, message, ctx).await;
-            }
-        } else {
-            let res = <S as Handler<M>>::handle(svc, message, ctx).await;
-
-            if let Some(rc) = result_channel {
-                if rc.send(res).is_err() {
-                    log::warn!("Channel Closed");
-                }
-            }
-        }
+        let handle = ReplyHandle::new(result_channel);
+        <S as Handler<M>>::handle_preferred(svc, message, ctx, handle).await;
     }
 }
 

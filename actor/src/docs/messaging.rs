@@ -45,18 +45,17 @@
 //! - **`send`** — Enqueues the same handler path but **drops** the result. Synchronous for the
 //!   caller; still subject to mailbox ordering and backpressure characteristics of the
 //!   unbounded channel.
-//! - **Preferred dispatch** — If a message sets `Message::IS_PERFERRED = true`, `call` dispatches
-//!   through [`crate::Handler::handle_preferred`] (so custom reply behavior can use
-//!   [`crate::ReplyHandle`]). `send` still uses [`crate::Handler::handle`] because there is no
-//!   reply channel to drive.
+//! - **Preferred dispatch** — `call` and `send` both dispatch through
+//!   [`crate::Handler::handle_preferred`]. The default implementation calls
+//!   [`crate::Handler::handle`] and then replies through [`crate::ReplyHandle`].
 //!
 //! Use `send` when no return value is needed; use `call` when the caller must observe completion
 //! or a computed value.
 //!
 //! ## Implementing `handle_preferred` for non-blocking replies
 //!
-//! When `Message::IS_PERFERRED = true`, you can override
-//! [`crate::Handler::handle_preferred`] and spawn a background task to produce the reply later.
+//! You can override [`crate::Handler::handle_preferred`] and spawn a background task to produce
+//! the reply later.
 //! This keeps the actor mailbox moving instead of waiting inside `handle`.
 //!
 //! See also: `actor/examples/preferred.rs`.
@@ -77,7 +76,6 @@
 //!
 //! struct SlowDouble(pub u32);
 //! impl Message for SlowDouble {
-//!     const IS_PERFERRED: bool = true;
 //!     type Result = u32;
 //! }
 //!

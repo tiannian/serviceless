@@ -58,7 +58,6 @@ impl Handler<PreferredUsed> for TestActor {
 
 struct PreferredAdd(i32);
 impl Message for PreferredAdd {
-    const IS_PERFERRED: bool = true;
     type Result = i32;
 }
 

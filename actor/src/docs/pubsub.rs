@@ -55,7 +55,7 @@
 //! #[async_trait]
 //! impl Handler<DoWork> for MyService {
 //!     async fn handle(&mut self, _message: DoWork, ctx: &mut Context<Self, Self::Stream>) {
-//!         let _ = ctx.publish::<UserReadyTopic>(UserReadyTopic("user-42".into()), UserReady("done".into()));
+//!         let _ = ctx.publish_handle().publish::<UserReadyTopic>(UserReadyTopic("user-42".into()), UserReady("done".into()));
 //!     }
 //! }
 //!
