@@ -83,6 +83,7 @@ impl Handler<PreferredAdd> for TestActor {
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd)]
 enum NumberTopic {
     Even,
+    Odd,
 }
 
 impl Topic for NumberTopic {
@@ -198,6 +199,63 @@ async fn subscribe_receives_published_topic_item() {
 
     let published = subscriber.await.expect("subscriber task should finish");
     assert_eq!(published, 42);
+
+    addr.close_service();
+    runner.await.expect("service task should finish");
+}
+
+#[tokio::test]
+async fn subscribe_all_receives_every_publish_for_topic() {
+    let (addr, run) = TestActor::default().start_by_context(Context::new());
+    let runner = tokio::spawn(run);
+
+    let mut handle = addr
+        .subscribe_all(NumberTopic::Even)
+        .expect("subscribe_all should enqueue");
+
+    tokio::task::yield_now().await;
+
+    addr.send(PublishNumber {
+        topic: NumberTopic::Even,
+        value: 1,
+    })
+    .expect("first publish should enqueue");
+    addr.send(PublishNumber {
+        topic: NumberTopic::Even,
+        value: 2,
+    })
+    .expect("second publish should enqueue");
+
+    assert_eq!(handle.recv().await, Some(1));
+    assert_eq!(handle.recv().await, Some(2));
+
+    addr.close_service();
+    runner.await.expect("service task should finish");
+}
+
+#[tokio::test]
+async fn subscribe_all_only_receives_matching_topic_key() {
+    let (addr, run) = TestActor::default().start_by_context(Context::new());
+    let runner = tokio::spawn(run);
+
+    let mut handle = addr
+        .subscribe_all(NumberTopic::Even)
+        .expect("subscribe_all should enqueue");
+
+    tokio::task::yield_now().await;
+
+    addr.send(PublishNumber {
+        topic: NumberTopic::Odd,
+        value: 999,
+    })
+    .expect("publish to other topic key should enqueue");
+    addr.send(PublishNumber {
+        topic: NumberTopic::Even,
+        value: 42,
+    })
+    .expect("publish to subscribed key should enqueue");
+
+    assert_eq!(handle.recv().await, Some(42));
 
     addr.close_service();
     runner.await.expect("service task should finish");

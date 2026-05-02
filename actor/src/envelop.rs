@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use service_channel::oneshot;
+use service_channel::{mpsc, oneshot};
 
 use crate::{Context, Handler, Message, ReplyHandle, RoutedTopic, Service, Topic};
 
@@ -55,6 +55,21 @@ impl<S> Envelope<S> {
         T: Topic + RoutedTopic<S>,
     {
         Self(Box::new(PublishTopicEnvelope::<T>::new(topic, item)))
+    }
+
+    /// Register a subscriber waiting for all future publications.
+    pub fn new_subscribe_all_topic<T>(
+        topic: T,
+        result_channel: mpsc::UnboundedSender<T::Item>,
+    ) -> Self
+    where
+        S: Service + Send,
+        T: Topic + RoutedTopic<S>,
+    {
+        Self(Box::new(SubscribeAllTopicEnvelope::<T>::new(
+            topic,
+            result_channel,
+        )))
     }
 
     /// Create an Envelope from a boxed EnvelopWithMessage without re-boxing
@@ -188,5 +203,40 @@ where
     async fn handle(self: Box<Self>, svc: &mut S, _ctx: &mut Context<S, S::Stream>) {
         let Self { topic, item } = *self;
         T::endpoint(svc).publish(&topic, item);
+    }
+}
+
+pub(crate) struct SubscribeAllTopicEnvelope<T>
+where
+    T: Topic,
+{
+    topic: T,
+    result_channel: mpsc::UnboundedSender<T::Item>,
+}
+
+impl<T> SubscribeAllTopicEnvelope<T>
+where
+    T: Topic,
+{
+    pub(crate) fn new(topic: T, result_channel: mpsc::UnboundedSender<T::Item>) -> Self {
+        Self {
+            topic,
+            result_channel,
+        }
+    }
+}
+
+#[async_trait]
+impl<S, T> EnvelopProxy<S> for SubscribeAllTopicEnvelope<T>
+where
+    S: Service + Send,
+    T: Topic + RoutedTopic<S>,
+{
+    async fn handle(self: Box<Self>, svc: &mut S, _ctx: &mut Context<S, S::Stream>) {
+        let Self {
+            topic,
+            result_channel,
+        } = *self;
+        T::endpoint(svc).subscribe_all(topic, result_channel);
     }
 }

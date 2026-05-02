@@ -1,5 +1,5 @@
 use futures_util::{StreamExt, TryFutureExt};
-use service_channel::mpsc::{unbounded, UnboundedSender};
+use service_channel::mpsc::{self, unbounded, UnboundedSender};
 use service_channel::oneshot;
 use std::future::Future;
 
@@ -8,7 +8,7 @@ use crate::{
     envelop::{EnvelopWithMessage, Envelope},
     Error, Handler, Message, Result, Service,
 };
-use crate::{RoutedTopic, Topic};
+use crate::{RoutedTopic, Topic, TopicAllHandle};
 
 /// Address of Service
 ///
@@ -92,6 +92,18 @@ where
             .map_err(|_| Error::ServiceStoped)?;
 
         Ok(receiver.map_err(|_| Error::ServiceStoped))
+    }
+
+    pub fn subscribe_all<T>(&self, topic: T) -> Result<TopicAllHandle<T>>
+    where
+        T: Topic + RoutedTopic<S>,
+    {
+        let (sender, receiver) = mpsc::unbounded::<T::Item>();
+        let env = Envelope::<S>::new_subscribe_all_topic::<T>(topic, sender);
+        self.sender
+            .unbounded_send(env)
+            .map_err(|_| Error::ServiceStoped)?;
+        Ok(TopicAllHandle::new(receiver))
     }
 
     /// Convert ServiceAddress to Address for a specific message type
