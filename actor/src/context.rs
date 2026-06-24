@@ -3,36 +3,39 @@ use futures_util::{
     Stream, StreamExt,
 };
 use service_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use std::future::Future;
+use std::{future::Future, marker::PhantomData};
 
-use crate::{Envelope, Error, Result, RoutedTopic, Service, ServiceAddress, Topic};
+use crate::{
+    Envelope, Error, Result, RoutedTopic, Runtime, RuntimedService, RuntimedServiceAddress, Topic,
+};
 
 /// Context to run service
-pub struct Context<S, T>
+pub struct Context<S, T, R>
 where
-    T: Stream<Item = Envelope<S>> + Unpin,
+    T: Stream<Item = Envelope<S, R>> + Unpin,
 {
-    sender: UnboundedSender<Envelope<S>>,
-    receiver: Select<UnboundedReceiver<Envelope<S>>, T>,
+    sender: UnboundedSender<Envelope<S, R>>,
+    receiver: Select<UnboundedReceiver<Envelope<S, R>>, T>,
+    marker_runtime: PhantomData<R>,
 }
 
-impl<S> Default for Context<S, Empty<Envelope<S>>> {
+impl<S, R> Default for Context<S, Empty<Envelope<S, R>>, R> {
     /// Equivalent to [`Context::new`].
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S> Context<S, Empty<Envelope<S>>> {
+impl<S, R> Context<S, Empty<Envelope<S, R>>, R> {
     /// Create an empty context
     pub fn new() -> Self {
         Self::with_stream(empty())
     }
 }
 
-impl<S, T> Context<S, T>
+impl<S, T, R> Context<S, T, R>
 where
-    T: Stream<Item = Envelope<S>> + Unpin,
+    T: Stream<Item = Envelope<S, R>> + Unpin,
 {
     /// Create a context with an additional stream of envelopes.
     pub fn with_stream(stream: T) -> Self {
@@ -41,6 +44,7 @@ where
         Self {
             sender,
             receiver: select(receiver, stream),
+            marker_runtime: PhantomData,
         }
     }
 
@@ -48,16 +52,17 @@ where
     ///
     /// Even if service not start, you can also get an address.
     /// But if you send message, the message maybe lost.
-    pub fn addr(&self) -> ServiceAddress<S> {
-        ServiceAddress {
+    pub fn addr(&self) -> RuntimedServiceAddress<S, R> {
+        RuntimedServiceAddress {
             sender: self.sender.clone(),
         }
     }
 
     /// Get a publish handle
-    pub fn publish_handle(&self) -> PublishHandle<S>
+    pub fn publish_handle(&self) -> PublishHandle<S, R>
     where
-        S: Service,
+        S: RuntimedService<R>,
+        R: Runtime,
     {
         PublishHandle {
             sender: self.sender.clone(),
@@ -79,16 +84,23 @@ where
     }
 }
 
-impl<S, T> Context<S, T>
+impl<S, T, R> Context<S, T, R>
 where
-    S: Service<Stream = T> + Send + Sized,
-    T: Stream<Item = Envelope<S>> + Unpin + Send,
+    S: RuntimedService<R, Stream = T> + Send + Sized,
+    T: Stream<Item = Envelope<S, R>> + Unpin + Send,
+    R: Runtime,
 {
     /// Start an service
     ///
     /// Returns the address and a future that should be spawned to run the service.
     /// The caller is responsible for spawning the returned future using their async runtime.
-    pub fn run(self, service: S) -> (ServiceAddress<S>, impl Future<Output = ()> + Send) {
+    pub fn run(
+        self,
+        service: S,
+    ) -> (
+        RuntimedServiceAddress<S, R>,
+        impl Future<Output = ()> + Send,
+    ) {
         let mut this = self;
 
         let address = this.addr();
@@ -107,26 +119,28 @@ where
     }
 }
 
-pub struct PublishHandle<S>
+pub struct PublishHandle<S, R>
 where
-    S: Service,
+    S: RuntimedService<R>,
+    R: Runtime,
 {
-    pub(crate) sender: UnboundedSender<Envelope<S>>,
+    pub(crate) sender: UnboundedSender<Envelope<S, R>>,
 }
 
-impl<S> PublishHandle<S>
+impl<S, R> PublishHandle<S, R>
 where
-    S: Service,
+    S: RuntimedService<R>,
+    R: Runtime,
 {
     /// Publish one item to a specific topic value.
     ///
     /// The actual delivery is still serialized through the service mailbox.
     pub fn publish<TopicT>(&self, topic: TopicT, item: TopicT::Item) -> Result<()>
     where
-        TopicT: Topic + RoutedTopic<S>,
-        S: Service,
+        TopicT: Topic + RoutedTopic<S, R>,
+        S: RuntimedService<R>,
     {
-        let env = Envelope::<S>::new_publish_topic::<TopicT>(topic, item);
+        let env = Envelope::<S, R>::new_publish_topic::<TopicT>(topic, item);
 
         self.sender
             .unbounded_send(env)

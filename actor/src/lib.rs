@@ -76,6 +76,12 @@
 //!
 //! Longer explanations, caveats, and pub/sub details live under [`docs`].
 
+mod metadata;
+pub use metadata::*;
+
+mod runtime;
+pub use runtime::*;
+
 mod service;
 pub use service::*;
 
@@ -93,9 +99,6 @@ pub use envelop::*;
 
 mod error;
 pub use error::*;
-
-mod address;
-pub use address::*;
 
 mod service_address;
 pub use service_address::*;

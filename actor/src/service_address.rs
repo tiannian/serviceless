@@ -1,23 +1,19 @@
-use futures_util::{StreamExt, TryFutureExt};
-use service_channel::mpsc::{self, unbounded, UnboundedSender};
+use futures_util::TryFutureExt;
+use service_channel::mpsc::{self, UnboundedSender};
 use service_channel::oneshot;
 use std::future::Future;
 
-use crate::{
-    address::Address,
-    envelop::{EnvelopWithMessage, Envelope},
-    Error, Handler, Message, Result, Service,
-};
+use crate::{envelop::Envelope, Error, Message, Result, Runtime, RuntimedHandler, RuntimedService};
 use crate::{RoutedTopic, Topic, TopicAllHandle};
 
 /// Address of Service
 ///
 /// This address can clone.
-pub struct ServiceAddress<S> {
-    pub(crate) sender: UnboundedSender<Envelope<S>>,
+pub struct RuntimedServiceAddress<S, R> {
+    pub(crate) sender: UnboundedSender<Envelope<S, R>>,
 }
 
-impl<S> Clone for ServiceAddress<S> {
+impl<S, R> Clone for RuntimedServiceAddress<S, R> {
     fn clone(&self) -> Self {
         Self {
             sender: self.sender.clone(),
@@ -25,7 +21,7 @@ impl<S> Clone for ServiceAddress<S> {
     }
 }
 
-impl<S> ServiceAddress<S> {
+impl<S, R> RuntimedServiceAddress<S, R> {
     /// Return true when service stopped.
     pub fn is_stop(&self) -> bool {
         self.sender.is_closed()
@@ -37,15 +33,16 @@ impl<S> ServiceAddress<S> {
     }
 }
 
-impl<S> ServiceAddress<S>
+impl<S, R> RuntimedServiceAddress<S, R>
 where
-    S: Service,
+    S: RuntimedService<R>,
+    R: Runtime,
 {
     /// Call service's handler and get result
     pub async fn call<M>(&self, message: M) -> Result<M::Result>
     where
         M: Message + Send + 'static,
-        S: Handler<M>,
+        S: RuntimedHandler<M, R>,
         M::Result: Send,
     {
         let (sender, receiver) = oneshot::channel::<M::Result>();
@@ -65,7 +62,7 @@ where
     pub fn send<M>(&self, message: M) -> Result<()>
     where
         M: Message + Send + 'static,
-        S: Handler<M>,
+        S: RuntimedHandler<M, R>,
         M::Result: Send,
     {
         let env = Envelope::new(message);
@@ -82,10 +79,10 @@ where
     /// One call waits for one future publication.
     pub fn subscribe<T>(&self, topic: T) -> Result<impl Future<Output = Result<T::Item>> + Send>
     where
-        T: Topic + RoutedTopic<S>,
+        T: Topic + RoutedTopic<S, R>,
     {
         let (sender, receiver) = oneshot::channel::<T::Item>();
-        let env = Envelope::<S>::new_subscribe_topic::<T>(topic, sender);
+        let env = Envelope::<S, R>::new_subscribe_topic::<T>(topic, sender);
 
         self.sender
             .unbounded_send(env)
@@ -96,45 +93,13 @@ where
 
     pub fn subscribe_all<T>(&self, topic: T) -> Result<TopicAllHandle<T>>
     where
-        T: Topic + RoutedTopic<S>,
+        T: Topic + RoutedTopic<S, R>,
     {
         let (sender, receiver) = mpsc::unbounded::<T::Item>();
-        let env = Envelope::<S>::new_subscribe_all_topic::<T>(topic, sender);
+        let env = Envelope::<S, R>::new_subscribe_all_topic::<T>(topic, sender);
         self.sender
             .unbounded_send(env)
             .map_err(|_| Error::ServiceStoped)?;
         Ok(TopicAllHandle::new(receiver))
-    }
-
-    /// Convert ServiceAddress to Address for a specific message type
-    ///
-    /// This creates a forwarding task that receives messages from the Address
-    /// and forwards them to the ServiceAddress. The returned Address can only
-    /// send messages of type M.
-    ///
-    /// Returns the Address and a Future that should be spawned to run the forwarding task.
-    pub fn into_address<M>(self) -> (Address<M>, impl Future<Output = ()> + Send)
-    where
-        M: Message + Send + 'static,
-        S: Handler<M> + Send,
-        M::Result: Send,
-    {
-        let (sender, mut receiver) = unbounded::<Box<EnvelopWithMessage<M>>>();
-        let service_sender = self.sender;
-
-        let address = Address { sender };
-
-        let future = async move {
-            while let Some(boxed_env) = receiver.next().await {
-                // Convert Box<EnvelopWithMessage<M>> to Envelope<S> without re-boxing
-                let envelope = Envelope::from_boxed(boxed_env);
-                if service_sender.unbounded_send(envelope).is_err() {
-                    // Service stopped, break the forwarding loop
-                    break;
-                }
-            }
-        };
-
-        (address, future)
     }
 }

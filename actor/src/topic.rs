@@ -1,6 +1,8 @@
 use service_channel::{mpsc, oneshot};
 use std::collections::BTreeMap;
 
+use crate::{Runtime, RuntimedService};
+
 /// A typed pub/sub topic.
 pub trait Topic: Ord + Clone + Send + 'static {
     type Item: Clone + Send + 'static;
@@ -10,9 +12,10 @@ pub trait Topic: Ord + Clone + Send + 'static {
 ///
 /// This is the key piece that replaces Any/TypeId routing:
 /// each topic knows where its endpoint lives on service S.
-pub trait RoutedTopic<S>: Topic
+pub trait RoutedTopic<S, R>: Topic
 where
-    S: crate::Service,
+    S: RuntimedService<R>,
+    R: Runtime,
 {
     /// Returns this topic's [`TopicEndpoint`] on `service`.
     ///
@@ -81,16 +84,4 @@ where
             }
         }
     }
-
-    // /// Remove all pending subscribers without publishing.
-    // ///
-    // /// Dropped [`oneshot::Sender`]s cause the corresponding receivers to see a closed channel.
-    // pub fn clear(&mut self) {
-    //     self.once_waiters.clear();
-    // }
-
-    // /// Remove all pending subscribers for a specific topic value.
-    // pub fn clear_topic(&mut self, topic: &T) {
-    //     self.once_waiters.remove(topic);
-    // }
 }
