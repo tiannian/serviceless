@@ -11,14 +11,14 @@ use crate::{
     Topic,
 };
 
-pub struct TopicAllHandle<T: Topic, R>
+pub struct RuntimedTopicAllHandle<T: Topic, R>
 where
     R: Runtime,
 {
     receiver: R::UnboundedReceiver<T::Item>,
 }
 
-impl<T, R> TopicAllHandle<T, R>
+impl<T, R> RuntimedTopicAllHandle<T, R>
 where
     T: Topic,
     R: Runtime,
@@ -36,7 +36,7 @@ where
     }
 }
 
-impl<T, R> Stream for TopicAllHandle<T, R>
+impl<T, R> Stream for RuntimedTopicAllHandle<T, R>
 where
     T: Topic,
     R: Runtime,

@@ -3,7 +3,7 @@ use crate::{
     Error, Message,
 };
 
-pub struct ReplyHandle<M, R>
+pub struct RuntimedReplyHandle<M, R>
 where
     M: Message,
     R: Runtime,
@@ -11,7 +11,7 @@ where
     sender: Option<R::OneshotSender<M::Result>>,
 }
 
-impl<M, R> ReplyHandle<M, R>
+impl<M, R> RuntimedReplyHandle<M, R>
 where
     M: Message,
     R: Runtime,

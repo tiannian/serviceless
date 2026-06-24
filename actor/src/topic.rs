@@ -22,7 +22,7 @@ where
     ///
     /// Implementations should consistently point at the same logical field on `S` so
     /// routing matches how the service stores topic state.
-    fn endpoint(service: &mut S) -> &mut TopicEndpoint<Self, S::Runtime>
+    fn endpoint(service: &mut S) -> &mut RuntimedTopicEndpoint<Self, S::Runtime>
     where
         Self: Sized;
 }
@@ -32,7 +32,7 @@ where
 /// - each subscribe registers one waiter
 /// - each publish wakes all current waiters once
 /// - future publishes require future subscribe calls again
-pub struct TopicEndpoint<T, R>
+pub struct RuntimedTopicEndpoint<T, R>
 where
     T: Topic,
     R: Runtime,
@@ -41,7 +41,7 @@ where
     all_waiters: BTreeMap<T, Vec<R::UnboundedSender<T::Item>>>,
 }
 
-impl<T, R> Default for TopicEndpoint<T, R>
+impl<T, R> Default for RuntimedTopicEndpoint<T, R>
 where
     T: Topic,
     R: Runtime,
@@ -55,7 +55,7 @@ where
     }
 }
 
-impl<T, R> TopicEndpoint<T, R>
+impl<T, R> RuntimedTopicEndpoint<T, R>
 where
     T: Topic,
     R: Runtime,

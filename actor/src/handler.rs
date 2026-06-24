@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 
-use crate::{Context, ReplyHandle, RuntimedService};
+use crate::{Context, RuntimedReplyHandle, RuntimedService};
 
 /// Handler message on service
 #[async_trait]
-pub trait RuntimedHandler<M>
+pub trait Handler<M>
 where
     Self: RuntimedService + Sized,
     M: Message,
@@ -17,7 +17,7 @@ where
         &mut self,
         message: M,
         ctx: &mut Context<Self>,
-        handle: ReplyHandle<M, Self::Runtime>,
+        handle: RuntimedReplyHandle<M, Self::Runtime>,
     ) where
         M: Send + 'static,
         M::Result: Send,

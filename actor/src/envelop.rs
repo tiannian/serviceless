@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use crate::{
-    runtime::Runtime, Context, Message, ReplyHandle, RoutedTopic, RuntimedHandler, RuntimedService,
+    runtime::Runtime, Context, Handler, Message, RoutedTopic, RuntimedReplyHandle, RuntimedService,
     Topic,
 };
 
@@ -20,7 +20,7 @@ impl<S> Envelope<S> {
     pub fn new<M>(message: M) -> Self
     where
         M: Message,
-        S: RuntimedHandler<M>,
+        S: Handler<M>,
     {
         Self::Message(Box::new(EnvelopWithMessage::<M, S::Runtime>::new(
             message, None,
@@ -35,7 +35,7 @@ impl<S> Envelope<S> {
         result_channel: Option<<S::Runtime as Runtime>::OneshotSender<M::Result>>,
     ) -> Self
     where
-        S: RuntimedHandler<M>,
+        S: Handler<M>,
         M: Message,
     {
         Self::Message(Box::new(EnvelopWithMessage::<M, S::Runtime>::new(
@@ -147,14 +147,14 @@ where
 impl<S, M> EnvelopProxy<S> for EnvelopWithMessage<M, S::Runtime>
 where
     M: Message,
-    S: RuntimedHandler<M>,
+    S: Handler<M>,
 {
     async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut Context<S>) {
         let message = self.message;
         let result_channel = self.result_channel;
 
-        let handle = ReplyHandle::new(result_channel);
-        <S as RuntimedHandler<M>>::handle_preferred(svc, message, ctx, handle).await;
+        let handle = RuntimedReplyHandle::new(result_channel);
+        <S as Handler<M>>::handle_preferred(svc, message, ctx, handle).await;
     }
 }
 

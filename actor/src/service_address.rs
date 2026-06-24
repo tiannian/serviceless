@@ -4,7 +4,7 @@ use std::future::Future;
 use crate::{
     envelop::Envelope,
     runtime::{OneshotReceiver, Runtime, UnboundedSender},
-    Error, Message, Result, RoutedTopic, RuntimedHandler, RuntimedService, Topic, TopicAllHandle,
+    Error, Handler, Message, Result, RoutedTopic, RuntimedService, RuntimedTopicAllHandle, Topic,
 };
 
 /// Address of Service
@@ -51,7 +51,7 @@ where
     pub async fn call<M>(&self, message: M) -> Result<M::Result>
     where
         M: Message + Send + 'static,
-        S: RuntimedHandler<M>,
+        S: Handler<M>,
     {
         let (sender, receiver) = <S::Runtime as Runtime>::oneshot::<M::Result>();
 
@@ -68,7 +68,7 @@ where
     pub fn send<M>(&self, message: M) -> Result<()>
     where
         M: Message + Send + 'static,
-        S: RuntimedHandler<M>,
+        S: Handler<M>,
     {
         let env = Envelope::new(message);
 
@@ -92,13 +92,13 @@ where
         Ok(receiver.recv().map_err(|_| Error::ServiceStoped))
     }
 
-    pub fn subscribe_all<T>(&self, topic: T) -> Result<TopicAllHandle<T, S::Runtime>>
+    pub fn subscribe_all<T>(&self, topic: T) -> Result<RuntimedTopicAllHandle<T, S::Runtime>>
     where
         T: Topic + RoutedTopic<S>,
     {
         let (sender, receiver) = <S::Runtime as Runtime>::unbounded::<T::Item>();
         let env = Envelope::<S>::new_subscribe_all_topic::<T>(topic, sender);
         self.sender.send(env).map_err(|_| Error::ServiceStoped)?;
-        Ok(TopicAllHandle::new(receiver))
+        Ok(RuntimedTopicAllHandle::new(receiver))
     }
 }

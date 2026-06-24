@@ -1,5 +1,5 @@
 [package]
-name = "serviceless-actor"
+name = "serviceless"
 version = "0.5.0"
 edition = "2021"
 description = "An simple actor model in rust, like actix"
@@ -14,3 +14,14 @@ log = { workspace = true }
 thiserror = { workspace = true }
 futures-util = { workspace = true }
 futures-core = { workspace = true }
+
+tokio = { workspace = true, features = ["sync", "rt"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = [
+    "rt",
+    "sync",
+    "macros",
+    "rt-multi-thread",
+    "time",
+] }

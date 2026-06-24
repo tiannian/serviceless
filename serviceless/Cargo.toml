@@ -5,6 +5,9 @@ edition = "2024"
 
 [dependencies]
 serviceless-actor = { workspace = true }
+serviceless-tokio = { workspace = true }
+futures-core = { workspace = true }
+async-trait = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = [
