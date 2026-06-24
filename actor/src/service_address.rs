@@ -10,14 +10,14 @@ use crate::{
 /// Address of Service
 ///
 /// This address can clone.
-pub struct RuntimedServiceAddress<S>
+pub struct ServiceAddress<S>
 where
     S: RuntimedService,
 {
     pub(crate) sender: <S::Runtime as Runtime>::UnboundedSender<Envelope<S>>,
 }
 
-impl<S> Clone for RuntimedServiceAddress<S>
+impl<S> Clone for ServiceAddress<S>
 where
     S: RuntimedService,
 {
@@ -28,7 +28,7 @@ where
     }
 }
 
-impl<S> RuntimedServiceAddress<S>
+impl<S> ServiceAddress<S>
 where
     S: RuntimedService,
 {
@@ -43,7 +43,7 @@ where
     }
 }
 
-impl<S> RuntimedServiceAddress<S>
+impl<S> ServiceAddress<S>
 where
     S: RuntimedService,
 {

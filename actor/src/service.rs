@@ -3,7 +3,7 @@ use futures_core::Stream;
 use futures_util::stream::Empty;
 use std::future::Future;
 
-use crate::{runtime::Runtime, Context, Envelope, Metadata, RuntimedServiceAddress};
+use crate::{runtime::Runtime, Context, Envelope, Metadata, ServiceAddress};
 
 /// [`Empty`] stream of [`Envelope`] for [`Context::new`] when there is no extra envelope source.
 pub type EmptyStream<S> = Empty<Envelope<S>>;
@@ -28,7 +28,7 @@ pub trait RuntimedService: Send + Sized + 'static {
         self,
         ctx: Context<Self>,
     ) -> (
-        RuntimedServiceAddress<Self>,
+        ServiceAddress<Self>,
         impl Future<Output = Result<(), Self::Error>> + Send,
     ) {
         ctx.run(self)

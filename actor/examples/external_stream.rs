@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use futures_util::{
-    future::{Ready as FuturesReady, ready},
-    stream::{Once, once},
+    future::{ready, Ready as FuturesReady},
+    stream::{once, Once},
 };
 use std::time::Duration;
 use tokio::time::sleep;
 
-use serviceless::{Context, Envelope, Handler, Message, Service};
+use serviceless::{Context, Envelope, Handler, Message, Metadata, Service};
 
 #[derive(Debug, Default)]
 struct ExternalStreamService {}
@@ -20,7 +20,7 @@ impl Message for StreamEvent {
 
 #[async_trait]
 impl Handler<StreamEvent> for ExternalStreamService {
-    async fn handle(&mut self, message: StreamEvent, _ctx: &mut Context<Self, Self::Stream>) -> u8 {
+    async fn handle(&mut self, message: StreamEvent, _ctx: &mut Context<Self>) -> u8 {
         println!("stream pushed: {}", message.0);
         message.0
     }
@@ -30,12 +30,22 @@ impl Handler<StreamEvent> for ExternalStreamService {
 impl Service for ExternalStreamService {
     type Stream = Once<FuturesReady<Envelope<Self>>>;
 
-    async fn started(&mut self, _ctx: &mut Context<Self, Self::Stream>) {
-        println!("external stream service started");
+    type Error = ();
+
+    fn metadata(&self) -> Metadata<'_> {
+        Metadata {
+            name: "external_stream_service",
+        }
     }
 
-    async fn stopped(&mut self, _ctx: &mut Context<Self, Self::Stream>) {
+    async fn started(&mut self, _ctx: &mut Context<Self>) -> Result<(), Self::Error> {
+        println!("external stream service started");
+        Ok(())
+    }
+
+    async fn stopped(&mut self, _ctx: &mut Context<Self>) -> Result<(), Self::Error> {
         println!("external stream service stopped");
+        Ok(())
     }
 }
 
@@ -51,5 +61,5 @@ async fn main() {
     sleep(Duration::from_millis(20)).await;
 
     service_addr.close_service();
-    service_handle.await.expect("service join failed");
+    service_handle.await.expect("service join failed").unwrap();
 }

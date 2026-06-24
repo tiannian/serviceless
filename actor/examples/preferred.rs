@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use std::time::Duration;
 use tokio::time::{sleep, timeout};
 
-use serviceless::{Context, EmptyStream, Handler, Message, ReplyHandle, Service};
+use serviceless::{Context, EmptyStream, Handler, Message, Metadata, ReplyHandle, Service};
 
 #[derive(Default)]
 struct PreferredService;
@@ -10,6 +10,14 @@ struct PreferredService;
 #[async_trait]
 impl Service for PreferredService {
     type Stream = EmptyStream<Self>;
+
+    type Error = ();
+
+    fn metadata(&self) -> Metadata<'_> {
+        Metadata {
+            name: "preferred_service",
+        }
+    }
 }
 
 struct SlowDouble(pub u32);
@@ -26,14 +34,14 @@ impl Message for Ping {
 
 #[async_trait]
 impl Handler<SlowDouble> for PreferredService {
-    async fn handle(&mut self, message: SlowDouble, _ctx: &mut Context<Self, Self::Stream>) -> u32 {
+    async fn handle(&mut self, message: SlowDouble, _ctx: &mut Context<Self>) -> u32 {
         message.0 * 2
     }
 
     async fn handle_preferred(
         &mut self,
         message: SlowDouble,
-        _ctx: &mut Context<Self, Self::Stream>,
+        _ctx: &mut Context<Self>,
         handle: ReplyHandle<SlowDouble>,
     ) {
         tokio::spawn(async move {
@@ -45,11 +53,7 @@ impl Handler<SlowDouble> for PreferredService {
 
 #[async_trait]
 impl Handler<Ping> for PreferredService {
-    async fn handle(
-        &mut self,
-        _message: Ping,
-        _ctx: &mut Context<Self, Self::Stream>,
-    ) -> &'static str {
+    async fn handle(&mut self, _message: Ping, _ctx: &mut Context<Self>) -> &'static str {
         "pong"
     }
 }
@@ -73,5 +77,5 @@ async fn main() {
     println!("slow preferred reply: {out}");
 
     addr.close_service();
-    service_handle.await.expect("service join failed");
+    service_handle.await.expect("service join failed").unwrap();
 }

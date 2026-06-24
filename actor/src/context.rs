@@ -6,7 +6,7 @@ use std::future::Future;
 
 use crate::{
     runtime::{Runtime, Spawner, UnboundedReceiver, UnboundedSender},
-    Envelope, Error, RoutedTopic, RuntimedService, RuntimedServiceAddress, Topic,
+    Envelope, Error, RoutedTopic, RuntimedService, ServiceAddress, Topic,
 };
 
 /// Context to run service
@@ -58,8 +58,8 @@ where
     ///
     /// Even if service not start, you can also get an address.
     /// But if you send message, the message maybe lost.
-    pub fn addr(&self) -> RuntimedServiceAddress<S> {
-        RuntimedServiceAddress {
+    pub fn addr(&self) -> ServiceAddress<S> {
+        ServiceAddress {
             sender: self.sender.clone(),
         }
     }
@@ -106,7 +106,7 @@ where
         self,
         service: S,
     ) -> (
-        RuntimedServiceAddress<S>,
+        ServiceAddress<S>,
         impl Future<Output = Result<(), S::Error>> + Send,
     ) {
         let mut this = self;

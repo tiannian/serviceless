@@ -1,6 +1,6 @@
 use std::future::Future;
 
-use crate::{Context, Envelope, Metadata, RuntimedService, RuntimedServiceAddress};
+use crate::{Context, Envelope, Metadata, RuntimedService, ServiceAddress};
 use futures_core::Stream;
 
 use async_trait::async_trait;
@@ -21,7 +21,7 @@ pub trait Service: Send + Sized + 'static {
         self,
         ctx: Context<Self>,
     ) -> (
-        RuntimedServiceAddress<Self>,
+        ServiceAddress<Self>,
         impl Future<Output = Result<(), Self::Error>> + Send,
     ) {
         ctx.run(self)
@@ -57,7 +57,7 @@ where
         self,
         ctx: Context<Self>,
     ) -> (
-        RuntimedServiceAddress<Self>,
+        ServiceAddress<Self>,
         impl Future<Output = Result<(), Self::Error>> + Send,
     ) {
         self.start_by_context(ctx)
