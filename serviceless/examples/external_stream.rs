@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use futures_util::{
-    future::{ready, Ready as FuturesReady},
-    stream::{once, Once},
+    future::{Ready as FuturesReady, ready},
+    stream::{Once, once},
 };
 use std::time::Duration;
 use tokio::time::sleep;
