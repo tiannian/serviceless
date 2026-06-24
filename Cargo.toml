@@ -11,3 +11,4 @@ futures-core = "0.3"
 futures-sink = "0.3"
 futures-util = "0.3"
 tokio = { version = "1.37.0", default-features = false }
+prometheus-client = "0.25.0"

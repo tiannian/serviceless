@@ -105,4 +105,8 @@ where
     fn close(&mut self) {
         self.receiver.close();
     }
+
+    fn len(&self) -> usize {
+        self.receiver.len()
+    }
 }

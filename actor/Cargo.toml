@@ -17,6 +17,8 @@ futures-core = { workspace = true }
 
 tokio = { workspace = true, features = ["sync", "rt"] }
 
+prometheus-client = { workspace = true }
+
 [dev-dependencies]
 tokio = { workspace = true, features = [
     "rt",

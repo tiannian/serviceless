@@ -63,7 +63,7 @@ async fn demo(addr: ServiceAddress<MyService>) {
 #[tokio::main]
 async fn main() {
     let service = MyService::default();
-    let (addr, future) = service.start_by_context(Context::new());
+    let (addr, future) = Context::new().run(service, None);
     tokio::spawn(future);
     demo(addr).await;
 }

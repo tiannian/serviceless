@@ -49,7 +49,7 @@ async fn main() {
 
     let ctx = Context::new();
 
-    let (service_addr, future) = srv.start_by_context(ctx);
+    let (service_addr, future) = ctx.run(srv, None);
     let service_handle = tokio::spawn(future);
 
     // Test with different types

@@ -1,6 +1,4 @@
-use std::future::Future;
-
-use crate::{Context, Envelope, Metadata, RuntimedService, ServiceAddress};
+use crate::{Context, Envelope, Metadata, RuntimedService};
 use futures_core::Stream;
 
 use async_trait::async_trait;
@@ -12,20 +10,6 @@ pub trait Service: Send + Sized + 'static {
     type Error: Send;
 
     fn metadata(&self) -> Metadata<'_>;
-
-    /// Start a service with the given context
-    ///
-    /// Returns the address and a future that should be spawned to run the service.
-    /// The caller is responsible for spawning the returned future using their async runtime.
-    fn start_by_context(
-        self,
-        ctx: Context<Self>,
-    ) -> (
-        ServiceAddress<Self>,
-        impl Future<Output = Result<(), Self::Error>> + Send,
-    ) {
-        ctx.run(self)
-    }
 
     /// Hook for service started
     async fn started(&mut self, _ctx: &mut Context<Self>) -> Result<(), Self::Error> {
@@ -51,16 +35,6 @@ where
 
     fn metadata(&self) -> Metadata<'_> {
         self.metadata()
-    }
-
-    fn start_by_context(
-        self,
-        ctx: Context<Self>,
-    ) -> (
-        ServiceAddress<Self>,
-        impl Future<Output = Result<(), Self::Error>> + Send,
-    ) {
-        self.start_by_context(ctx)
     }
 
     async fn started(&mut self, _ctx: &mut Context<Self>) -> Result<(), Self::Error> {

@@ -2,12 +2,76 @@ use futures_util::{
     stream::{empty, select, Empty, Select},
     StreamExt,
 };
+use prometheus_client::{
+    metrics::{
+        counter::Counter,
+        gauge::Gauge,
+        histogram::{exponential_buckets, Histogram},
+    },
+    registry::Registry,
+};
 use std::future::Future;
+use tokio::time::Instant;
 
 use crate::{
     runtime::{Runtime, Spawner, UnboundedReceiver, UnboundedSender},
     Envelope, Error, RoutedTopic, RuntimedService, ServiceAddress, Topic,
 };
+
+struct Metrics {
+    pub pending_tasks: Gauge,
+
+    pub message_processing_time: Histogram,
+    pub pending_messages: Gauge,
+    pub processed_messages: Counter,
+}
+
+impl Metrics {
+    pub fn new() -> Self {
+        let pending_tasks = Gauge::default();
+        let message_processing_time = Histogram::new(exponential_buckets(
+            0.0001, // 100us
+            2.0, 16,
+        ));
+        let pending_messages = Gauge::default();
+        let processed_messages = Counter::default();
+
+        Self {
+            pending_tasks,
+            message_processing_time,
+            pending_messages,
+            processed_messages,
+        }
+    }
+
+    pub fn register(&self, name: &str, registry: &mut Registry) {
+        let sub_registry = registry.sub_registry_with_prefix(name);
+
+        sub_registry.register(
+            "pending_tasks",
+            "Number of pending tasks",
+            self.pending_tasks.clone(),
+        );
+
+        sub_registry.register(
+            "message_processing_time",
+            "Time taken to process messages",
+            self.message_processing_time.clone(),
+        );
+
+        sub_registry.register(
+            "pending_messages",
+            "Number of pending messages",
+            self.pending_messages.clone(),
+        );
+
+        sub_registry.register(
+            "processed_messages",
+            "Number of processed messages",
+            self.processed_messages.clone(),
+        );
+    }
+}
 
 /// Context to run service
 pub struct Context<S>
@@ -17,6 +81,8 @@ where
     sender: <S::Runtime as Runtime>::UnboundedSender<Envelope<S>>,
     receiver: Select<<S::Runtime as Runtime>::UnboundedReceiver<Envelope<S>>, S::Stream>,
     tasks: <S::Runtime as Runtime>::Spawner<Result<(), S::Error>>,
+
+    metrics: Metrics,
 }
 
 impl<S> Default for Context<S>
@@ -51,6 +117,8 @@ where
             sender,
             receiver: select(receiver, stream),
             tasks: <S::Runtime as Runtime>::spawner(),
+
+            metrics: Metrics::new(),
         }
     }
 
@@ -92,6 +160,13 @@ where
     pub fn spawner(&mut self) -> &mut impl Spawner<Result<(), S::Error>> {
         &mut self.tasks
     }
+
+    pub(crate) fn receiver(
+        &mut self,
+    ) -> &mut <S::Runtime as Runtime>::UnboundedReceiver<Envelope<S>> {
+        let (receiver, _) = self.receiver.get_mut();
+        receiver
+    }
 }
 
 impl<S> Context<S>
@@ -105,11 +180,17 @@ where
     pub fn run(
         self,
         service: S,
+        registry: Option<&mut Registry>,
     ) -> (
         ServiceAddress<S>,
         impl Future<Output = Result<(), S::Error>> + Send,
     ) {
         let mut this = self;
+
+        if let Some(registry) = registry {
+            let name = service.metadata().name;
+            this.metrics.register(&name, registry);
+        }
 
         let address = this.addr();
 
@@ -117,9 +198,24 @@ where
 
         let future = async move {
             service.started(&mut this).await?;
+
             while let Some(e) = this.receiver.next().await {
+                let pending_tasks = this.tasks.len();
+                this.metrics.pending_tasks.set(pending_tasks as i64);
+
+                let pending_messages = this.receiver().len();
+                this.metrics.pending_messages.set(pending_messages as i64);
+
+                let start_time = Instant::now();
                 e.handle(&mut service, &mut this).await;
+                let duration = start_time.elapsed();
+                this.metrics
+                    .message_processing_time
+                    .observe(duration.as_secs_f64());
+
+                this.metrics.processed_messages.inc();
             }
+
             service.stopped(&mut this).await?;
 
             while this.tasks.join_next().await.is_some() {}

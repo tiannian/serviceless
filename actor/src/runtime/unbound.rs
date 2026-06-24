@@ -18,4 +18,6 @@ pub trait UnboundedReceiver<T>: InnerOp + Stream<Item = T> + Unpin + Send {
     async fn recv(&mut self) -> Result<T, Self::Error>;
 
     fn close(&mut self);
+
+    fn len(&self) -> usize;
 }

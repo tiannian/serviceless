@@ -55,7 +55,7 @@ async fn main() {
 
     let ctx = Context::with_stream(stream);
 
-    let (service_addr, future) = ExternalStreamService::default().start_by_context(ctx);
+    let (service_addr, future) = ctx.run(ExternalStreamService::default(), None);
     let service_handle = tokio::spawn(future);
 
     sleep(Duration::from_millis(20)).await;
