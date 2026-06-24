@@ -122,6 +122,8 @@ where
             }
             service.stopped(&mut this).await?;
 
+            while this.tasks.join_next().await.is_some() {}
+
             Ok(())
         };
 
