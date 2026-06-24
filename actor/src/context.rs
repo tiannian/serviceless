@@ -2,31 +2,38 @@ use futures_util::{
     stream::{empty, select, Empty, Select},
     Stream, StreamExt,
 };
-use service_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use std::{future::Future, marker::PhantomData};
 
 use crate::{
     Envelope, Error, Result, RoutedTopic, Runtime, RuntimedService, RuntimedServiceAddress, Topic,
+    UnboundedReceiver, UnboundedSender,
 };
 
 /// Context to run service
 pub struct Context<S, T, R>
 where
     T: Stream<Item = Envelope<S, R>> + Unpin,
+    R: Runtime,
 {
-    sender: UnboundedSender<Envelope<S, R>>,
-    receiver: Select<UnboundedReceiver<Envelope<S, R>>, T>,
+    sender: R::UnboundedSender<Envelope<S, R>>,
+    receiver: Select<R::UnboundedReceiver<Envelope<S, R>>, T>,
     marker_runtime: PhantomData<R>,
 }
 
-impl<S, R> Default for Context<S, Empty<Envelope<S, R>>, R> {
+impl<S, R> Default for Context<S, Empty<Envelope<S, R>>, R>
+where
+    R: Runtime,
+{
     /// Equivalent to [`Context::new`].
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S, R> Context<S, Empty<Envelope<S, R>>, R> {
+impl<S, R> Context<S, Empty<Envelope<S, R>>, R>
+where
+    R: Runtime,
+{
     /// Create an empty context
     pub fn new() -> Self {
         Self::with_stream(empty())
@@ -36,10 +43,11 @@ impl<S, R> Context<S, Empty<Envelope<S, R>>, R> {
 impl<S, T, R> Context<S, T, R>
 where
     T: Stream<Item = Envelope<S, R>> + Unpin,
+    R: Runtime,
 {
     /// Create a context with an additional stream of envelopes.
     pub fn with_stream(stream: T) -> Self {
-        let (sender, receiver) = unbounded();
+        let (sender, receiver) = R::unbounded();
 
         Self {
             sender,
@@ -71,7 +79,8 @@ where
 
     /// Stop an service
     pub fn stop(&mut self) {
-        self.sender.close_channel()
+        let (receiver, _) = self.receiver.get_mut();
+        receiver.close();
     }
 
     /// Mutable reference to the extra envelope stream from [`Self::with_stream`].
@@ -124,7 +133,7 @@ where
     S: RuntimedService<R>,
     R: Runtime,
 {
-    pub(crate) sender: UnboundedSender<Envelope<S, R>>,
+    pub(crate) sender: R::UnboundedSender<Envelope<S, R>>,
 }
 
 impl<S, R> PublishHandle<S, R>
@@ -142,9 +151,7 @@ where
     {
         let env = Envelope::<S, R>::new_publish_topic::<TopicT>(topic, item);
 
-        self.sender
-            .unbounded_send(env)
-            .map_err(|_| Error::ServiceStoped)?;
+        self.sender.send(env).map_err(|_| Error::ServiceStoped)?;
 
         Ok(())
     }

@@ -5,19 +5,22 @@ use std::{
 
 use futures_core::Stream;
 use futures_util::StreamExt;
-use service_channel::mpsc;
 
-use crate::Topic;
+use crate::{Runtime, Topic, UnboundedReceiver};
 
-pub struct TopicAllHandle<T: Topic> {
-    receiver: mpsc::UnboundedReceiver<T::Item>,
+pub struct TopicAllHandle<T: Topic, R>
+where
+    R: Runtime,
+{
+    receiver: R::UnboundedReceiver<T::Item>,
 }
 
-impl<T> TopicAllHandle<T>
+impl<T, R> TopicAllHandle<T, R>
 where
     T: Topic,
+    R: Runtime,
 {
-    pub(crate) fn new(receiver: mpsc::UnboundedReceiver<T::Item>) -> Self {
+    pub(crate) fn new(receiver: R::UnboundedReceiver<T::Item>) -> Self {
         Self { receiver }
     }
 
@@ -30,9 +33,10 @@ where
     }
 }
 
-impl<T> Stream for TopicAllHandle<T>
+impl<T, R> Stream for TopicAllHandle<T, R>
 where
     T: Topic,
+    R: Runtime,
 {
     type Item = T::Item;
 

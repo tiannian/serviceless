@@ -1,19 +1,23 @@
 use futures_util::TryFutureExt;
-use service_channel::mpsc::{self, UnboundedSender};
-use service_channel::oneshot;
 use std::future::Future;
 
 use crate::{envelop::Envelope, Error, Message, Result, Runtime, RuntimedHandler, RuntimedService};
-use crate::{RoutedTopic, Topic, TopicAllHandle};
+use crate::{OneshotReceiver, RoutedTopic, Topic, TopicAllHandle, UnboundedSender};
 
 /// Address of Service
 ///
 /// This address can clone.
-pub struct RuntimedServiceAddress<S, R> {
-    pub(crate) sender: UnboundedSender<Envelope<S, R>>,
+pub struct RuntimedServiceAddress<S, R>
+where
+    R: Runtime,
+{
+    pub(crate) sender: R::UnboundedSender<Envelope<S, R>>,
 }
 
-impl<S, R> Clone for RuntimedServiceAddress<S, R> {
+impl<S, R> Clone for RuntimedServiceAddress<S, R>
+where
+    R: Runtime,
+{
     fn clone(&self) -> Self {
         Self {
             sender: self.sender.clone(),
@@ -21,7 +25,10 @@ impl<S, R> Clone for RuntimedServiceAddress<S, R> {
     }
 }
 
-impl<S, R> RuntimedServiceAddress<S, R> {
+impl<S, R> RuntimedServiceAddress<S, R>
+where
+    R: Runtime,
+{
     /// Return true when service stopped.
     pub fn is_stop(&self) -> bool {
         self.sender.is_closed()
@@ -29,7 +36,7 @@ impl<S, R> RuntimedServiceAddress<S, R> {
 
     /// Close the service channel
     pub fn close_service(&self) {
-        self.sender.close_channel()
+        let _ = self.sender.send(Envelope::StopService);
     }
 }
 
@@ -45,15 +52,13 @@ where
         S: RuntimedHandler<M, R>,
         M::Result: Send,
     {
-        let (sender, receiver) = oneshot::channel::<M::Result>();
+        let (sender, receiver) = R::oneshot::<M::Result>();
 
         let env = Envelope::new_with_result_channel(message, Some(sender));
 
-        self.sender
-            .unbounded_send(env)
-            .map_err(|_| Error::ServiceStoped)?;
+        self.sender.send(env).map_err(|_| Error::ServiceStoped)?;
 
-        receiver.await.map_err(|_| Error::ServiceStoped)
+        receiver.recv().await.map_err(|_| Error::ServiceStoped)
     }
 
     /// Call service's handler without result
@@ -67,9 +72,7 @@ where
     {
         let env = Envelope::new(message);
 
-        self.sender
-            .unbounded_send(env)
-            .map_err(|_| Error::ServiceStoped)?;
+        self.sender.send(env).map_err(|_| Error::ServiceStoped)?;
 
         Ok(())
     }
@@ -81,25 +84,21 @@ where
     where
         T: Topic + RoutedTopic<S, R>,
     {
-        let (sender, receiver) = oneshot::channel::<T::Item>();
+        let (sender, receiver) = R::oneshot::<T::Item>();
         let env = Envelope::<S, R>::new_subscribe_topic::<T>(topic, sender);
 
-        self.sender
-            .unbounded_send(env)
-            .map_err(|_| Error::ServiceStoped)?;
+        self.sender.send(env).map_err(|_| Error::ServiceStoped)?;
 
-        Ok(receiver.map_err(|_| Error::ServiceStoped))
+        Ok(receiver.recv().map_err(|_| Error::ServiceStoped))
     }
 
-    pub fn subscribe_all<T>(&self, topic: T) -> Result<TopicAllHandle<T>>
+    pub fn subscribe_all<T>(&self, topic: T) -> Result<TopicAllHandle<T, R>>
     where
         T: Topic + RoutedTopic<S, R>,
     {
-        let (sender, receiver) = mpsc::unbounded::<T::Item>();
+        let (sender, receiver) = R::unbounded::<T::Item>();
         let env = Envelope::<S, R>::new_subscribe_all_topic::<T>(topic, sender);
-        self.sender
-            .unbounded_send(env)
-            .map_err(|_| Error::ServiceStoped)?;
+        self.sender.send(env).map_err(|_| Error::ServiceStoped)?;
         Ok(TopicAllHandle::new(receiver))
     }
 }

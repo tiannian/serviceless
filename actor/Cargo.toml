@@ -12,9 +12,14 @@ readme = "../README.md"
 async-trait = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
-service-channel = { path = "../channel", version = "^0.1.2" }
 futures-util = { workspace = true }
 futures-core = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = [
+    "rt",
+    "sync",
+    "macros",
+    "rt-multi-thread",
+    "time",
+] }

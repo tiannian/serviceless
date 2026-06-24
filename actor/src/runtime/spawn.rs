@@ -2,36 +2,6 @@ use std::future::Future;
 
 use async_trait::async_trait;
 
-pub trait Runtime: Send {
-    type Error;
-
-    type UnboundedSender<T>: UnboundedSender<T, Error = Self::Error>;
-
-    type UnboundedReceiver<T>: UnboundedReceiver<T, Error = Self::Error>;
-
-    fn unbounded<T>(capacity: usize) -> (Self::UnboundedSender<T>, Self::UnboundedReceiver<T>);
-
-    type Spawner<T>: Spawner<T, Error = Self::Error>;
-
-    fn spawner<T>() -> Self::Spawner<T>;
-}
-
-pub trait UnboundedSender<T> {
-    type Error;
-
-    fn send(&self, item: T) -> Result<(), Self::Error>;
-
-    fn is_closed(&self) -> bool;
-}
-
-pub trait UnboundedReceiver<T> {
-    type Error;
-
-    fn recv(&mut self) -> Result<T, Self::Error>;
-
-    fn close(&mut self);
-}
-
 #[async_trait]
 pub trait Spawner<T> {
     type Error;

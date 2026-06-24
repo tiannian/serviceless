@@ -1,5 +1,5 @@
 [workspace]
-members = ["actor", "channel"]
+members = ["actor", "channel", "tokio"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -10,10 +10,7 @@ futures-channel = "0.3"
 futures-core = "0.3"
 futures-sink = "0.3"
 futures-util = "0.3"
-tokio = { version = "1.37.0", features = [
-    "rt",
-    "sync",
-    "macros",
-    "rt-multi-thread",
-    "time",
-] }
+tokio = { version = "1.37.0", default-features = false }
+
+serviceless-actor = { path = "./actor", version = "0.5.4" }
+serviceless-tokio = { path = "./tokio", version = "0.1.0" }

@@ -18,7 +18,7 @@ where
         &mut self,
         message: M,
         ctx: &mut Context<Self, Self::Stream, R>,
-        handle: ReplyHandle<M>,
+        handle: ReplyHandle<M, R>,
     ) where
         M: Send + 'static,
         M::Result: Send,

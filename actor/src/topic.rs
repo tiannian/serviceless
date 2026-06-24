@@ -1,7 +1,6 @@
-use service_channel::{mpsc, oneshot};
 use std::collections::BTreeMap;
 
-use crate::{Runtime, RuntimedService};
+use crate::{OneshotSender, Runtime, RuntimedService, UnboundedSender};
 
 /// A typed pub/sub topic.
 pub trait Topic: Ord + Clone + Send + 'static {
@@ -21,7 +20,7 @@ where
     ///
     /// Implementations should consistently point at the same logical field on `S` so
     /// routing matches how the service stores topic state.
-    fn endpoint(service: &mut S) -> &mut TopicEndpoint<Self>
+    fn endpoint(service: &mut S) -> &mut TopicEndpoint<Self, R>
     where
         Self: Sized;
 }
@@ -31,17 +30,19 @@ where
 /// - each subscribe registers one waiter
 /// - each publish wakes all current waiters once
 /// - future publishes require future subscribe calls again
-pub struct TopicEndpoint<T>
+pub struct TopicEndpoint<T, R>
 where
     T: Topic,
+    R: Runtime,
 {
-    once_waiters: BTreeMap<T, Vec<oneshot::Sender<T::Item>>>,
-    all_waiters: BTreeMap<T, Vec<mpsc::UnboundedSender<T::Item>>>,
+    once_waiters: BTreeMap<T, Vec<R::OneshotSender<T::Item>>>,
+    all_waiters: BTreeMap<T, Vec<R::UnboundedSender<T::Item>>>,
 }
 
-impl<T> Default for TopicEndpoint<T>
+impl<T, R> Default for TopicEndpoint<T, R>
 where
     T: Topic,
+    R: Runtime,
 {
     /// Empty endpoint with no waiters.
     fn default() -> Self {
@@ -52,17 +53,18 @@ where
     }
 }
 
-impl<T> TopicEndpoint<T>
+impl<T, R> TopicEndpoint<T, R>
 where
     T: Topic,
+    R: Runtime,
 {
     /// Register one subscriber waiting for the next publication.
-    pub fn subscribe(&mut self, topic: T, tx: oneshot::Sender<T::Item>) {
+    pub fn subscribe(&mut self, topic: T, tx: R::OneshotSender<T::Item>) {
         self.once_waiters.entry(topic).or_default().push(tx);
     }
 
     /// Register a subscriber waiting for all future publications.
-    pub fn subscribe_all(&mut self, topic: T, tx: mpsc::UnboundedSender<T::Item>) {
+    pub fn subscribe_all(&mut self, topic: T, tx: R::UnboundedSender<T::Item>) {
         self.all_waiters.entry(topic).or_default().push(tx);
     }
 
@@ -80,7 +82,7 @@ where
 
         if let Some(waiters) = waiters {
             for tx in waiters {
-                let _ = tx.unbounded_send(item.clone());
+                let _ = tx.send(item.clone());
             }
         }
     }

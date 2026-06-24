@@ -1,19 +1,19 @@
-use service_channel::oneshot;
+use crate::{Error, Message, OneshotSender, Runtime};
 
-use crate::{Error, Message};
-
-pub struct ReplyHandle<M>
+pub struct ReplyHandle<M, R>
 where
     M: Message,
+    R: Runtime,
 {
-    sender: Option<oneshot::Sender<M::Result>>,
+    sender: Option<R::OneshotSender<M::Result>>,
 }
 
-impl<M> ReplyHandle<M>
+impl<M, R> ReplyHandle<M, R>
 where
     M: Message,
+    R: Runtime,
 {
-    pub(crate) fn new(sender: Option<oneshot::Sender<M::Result>>) -> Self {
+    pub(crate) fn new(sender: Option<R::OneshotSender<M::Result>>) -> Self {
         Self { sender }
     }
 
@@ -27,7 +27,7 @@ where
 
     pub fn is_closed(&self) -> bool {
         if let Some(sender) = &self.sender {
-            sender.is_canceled()
+            sender.is_closed()
         } else {
             false
         }
