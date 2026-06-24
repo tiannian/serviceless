@@ -6,15 +6,17 @@ use std::future::Future;
 use crate::{runtime::Runtime, Context, Envelope, Metadata, RuntimedServiceAddress};
 
 /// [`Empty`] stream of [`Envelope`] for [`Context::new`] when there is no extra envelope source.
-pub type EmptyStream<S, R> = Empty<Envelope<S, R>>;
+pub type EmptyStream<S> = Empty<Envelope<S>>;
 
 /// A service is an running like thread
 #[async_trait]
-pub trait RuntimedService<R: Runtime>: Send + Sized + 'static {
+pub trait RuntimedService: Send + Sized + 'static {
     /// Extra envelope stream merged with the internal mailbox (see [`Context::with_stream`]).
-    type Stream: Stream<Item = Envelope<Self, R>> + Unpin + Send;
+    type Stream: Stream<Item = Envelope<Self>> + Unpin + Send;
 
     type Error: Send;
+
+    type Runtime: Runtime;
 
     fn metadata(&self) -> Metadata<'_>;
 
@@ -24,27 +26,21 @@ pub trait RuntimedService<R: Runtime>: Send + Sized + 'static {
     /// The caller is responsible for spawning the returned future using their async runtime.
     fn start_by_context(
         self,
-        ctx: Context<Self, Self::Stream, R>,
+        ctx: Context<Self>,
     ) -> (
-        RuntimedServiceAddress<Self, R>,
+        RuntimedServiceAddress<Self>,
         impl Future<Output = Result<(), Self::Error>> + Send,
     ) {
         ctx.run(self)
     }
 
     /// Hook for service started
-    async fn started(
-        &mut self,
-        _ctx: &mut Context<Self, Self::Stream, R>,
-    ) -> Result<(), Self::Error> {
+    async fn started(&mut self, _ctx: &mut Context<Self>) -> Result<(), Self::Error> {
         Ok(())
     }
 
     /// Hook for service stopped
-    async fn stopped(
-        &mut self,
-        _ctx: &mut Context<Self, Self::Stream, R>,
-    ) -> Result<(), Self::Error> {
+    async fn stopped(&mut self, _ctx: &mut Context<Self>) -> Result<(), Self::Error> {
         Ok(())
     }
 }

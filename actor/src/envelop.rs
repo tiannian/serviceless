@@ -10,20 +10,21 @@ use crate::{
 /// Usually constructed with [`Envelope::new`], [`Envelope::new_with_result_channel`],
 /// [`Envelope::new_subscribe_topic`], or [`Envelope::new_publish_topic`], then handled
 /// by [`Envelope::handle`] inside the service run loop.
-pub enum Envelope<S, R> {
-    Message(Box<dyn EnvelopProxy<S, R> + Send>),
+pub enum Envelope<S> {
+    Message(Box<dyn EnvelopProxy<S> + Send>),
     StopService,
 }
 
-impl<S, R> Envelope<S, R> {
+impl<S> Envelope<S> {
     /// Wrap a message for fire-and-forget delivery (no result sent to a caller).
     pub fn new<M>(message: M) -> Self
     where
         M: Message,
-        S: RuntimedHandler<M, R>,
-        R: Runtime,
+        S: RuntimedHandler<M>,
     {
-        Self::Message(Box::new(EnvelopWithMessage::new(message, None)))
+        Self::Message(Box::new(EnvelopWithMessage::<M, S::Runtime>::new(
+            message, None,
+        )))
     }
 
     /// Wrap a message and optionally send the handler's return value on `result_channel`.
@@ -31,24 +32,28 @@ impl<S, R> Envelope<S, R> {
     /// When `result_channel` is `None`, behaves like [`Self::new`].
     pub fn new_with_result_channel<M>(
         message: M,
-        result_channel: Option<R::OneshotSender<M::Result>>,
+        result_channel: Option<<S::Runtime as Runtime>::OneshotSender<M::Result>>,
     ) -> Self
     where
-        S: RuntimedHandler<M, R>,
+        S: RuntimedHandler<M>,
         M: Message,
-        R: Runtime,
     {
-        Self::Message(Box::new(EnvelopWithMessage::new(message, result_channel)))
+        Self::Message(Box::new(EnvelopWithMessage::<M, S::Runtime>::new(
+            message,
+            result_channel,
+        )))
     }
 
     /// Register a one-shot subscriber for a specific topic value.
-    pub fn new_subscribe_topic<T>(topic: T, result_channel: R::OneshotSender<T::Item>) -> Self
+    pub fn new_subscribe_topic<T>(
+        topic: T,
+        result_channel: <S::Runtime as Runtime>::OneshotSender<T::Item>,
+    ) -> Self
     where
-        S: RuntimedService<R> + Send,
-        T: Topic + RoutedTopic<S, R>,
-        R: Runtime,
+        S: RuntimedService + Send,
+        T: Topic + RoutedTopic<S>,
     {
-        Self::Message(Box::new(SubscribeTopicEnvelope::<T, R>::new(
+        Self::Message(Box::new(SubscribeTopicEnvelope::<T, S::Runtime>::new(
             topic,
             result_channel,
         )))
@@ -57,21 +62,22 @@ impl<S, R> Envelope<S, R> {
     /// Publish one item to a specific topic value.
     pub fn new_publish_topic<T>(topic: T, item: T::Item) -> Self
     where
-        S: RuntimedService<R>,
-        T: Topic + RoutedTopic<S, R>,
-        R: Runtime,
+        S: RuntimedService,
+        T: Topic + RoutedTopic<S>,
     {
         Self::Message(Box::new(PublishTopicEnvelope::<T>::new(topic, item)))
     }
 
     /// Register a subscriber waiting for all future publications.
-    pub fn new_subscribe_all_topic<T>(topic: T, result_channel: R::UnboundedSender<T::Item>) -> Self
+    pub fn new_subscribe_all_topic<T>(
+        topic: T,
+        result_channel: <S::Runtime as Runtime>::UnboundedSender<T::Item>,
+    ) -> Self
     where
-        S: RuntimedService<R> + Send,
-        T: Topic + RoutedTopic<S, R>,
-        R: Runtime,
+        S: RuntimedService + Send,
+        T: Topic + RoutedTopic<S>,
     {
-        Self::Message(Box::new(SubscribeAllTopicEnvelope::<T, R>::new(
+        Self::Message(Box::new(SubscribeAllTopicEnvelope::<T, S::Runtime>::new(
             topic,
             result_channel,
         )))
@@ -97,13 +103,12 @@ impl<S, R> Envelope<S, R> {
     // }
 }
 
-impl<S, R> Envelope<S, R>
+impl<S> Envelope<S>
 where
-    S: RuntimedService<R> + Send,
-    R: Runtime,
+    S: RuntimedService + Send,
 {
     /// Dispatch this envelope: run the message handler or apply the topic subscribe/publish.
-    pub async fn handle(self, svc: &mut S, ctx: &mut Context<S, S::Stream, R>) {
+    pub async fn handle(self, svc: &mut S, ctx: &mut Context<S>) {
         match self {
             Self::Message(message) => message.handle(svc, ctx).await,
             Self::StopService => ctx.stop(),
@@ -112,8 +117,8 @@ where
 }
 
 #[async_trait]
-pub trait EnvelopProxy<S: RuntimedService<R>, R: Runtime> {
-    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut Context<S, S::Stream, R>);
+pub trait EnvelopProxy<S: RuntimedService> {
+    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut Context<S>);
 }
 
 pub(crate) struct EnvelopWithMessage<M, R>
@@ -139,18 +144,17 @@ where
 }
 
 #[async_trait]
-impl<S, M, R> EnvelopProxy<S, R> for EnvelopWithMessage<M, R>
+impl<S, M> EnvelopProxy<S> for EnvelopWithMessage<M, S::Runtime>
 where
     M: Message,
-    S: RuntimedHandler<M, R>,
-    R: Runtime,
+    S: RuntimedHandler<M>,
 {
-    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut Context<S, S::Stream, R>) {
+    async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut Context<S>) {
         let message = self.message;
         let result_channel = self.result_channel;
 
         let handle = ReplyHandle::new(result_channel);
-        <S as RuntimedHandler<M, R>>::handle_preferred(svc, message, ctx, handle).await;
+        <S as RuntimedHandler<M>>::handle_preferred(svc, message, ctx, handle).await;
     }
 }
 
@@ -177,13 +181,12 @@ where
 }
 
 #[async_trait]
-impl<S, T, R> EnvelopProxy<S, R> for SubscribeTopicEnvelope<T, R>
+impl<S, T> EnvelopProxy<S> for SubscribeTopicEnvelope<T, S::Runtime>
 where
-    S: RuntimedService<R>,
-    T: Topic + RoutedTopic<S, R>,
-    R: Runtime,
+    S: RuntimedService,
+    T: Topic + RoutedTopic<S>,
 {
-    async fn handle(self: Box<Self>, svc: &mut S, _ctx: &mut Context<S, S::Stream, R>) {
+    async fn handle(self: Box<Self>, svc: &mut S, _ctx: &mut Context<S>) {
         let Self {
             topic,
             result_channel,
@@ -210,13 +213,12 @@ where
 }
 
 #[async_trait]
-impl<S, T, R> EnvelopProxy<S, R> for PublishTopicEnvelope<T>
+impl<S, T> EnvelopProxy<S> for PublishTopicEnvelope<T>
 where
-    S: RuntimedService<R>,
-    T: Topic + RoutedTopic<S, R>,
-    R: Runtime,
+    S: RuntimedService,
+    T: Topic + RoutedTopic<S>,
 {
-    async fn handle(self: Box<Self>, svc: &mut S, _ctx: &mut Context<S, S::Stream, R>) {
+    async fn handle(self: Box<Self>, svc: &mut S, _ctx: &mut Context<S>) {
         let Self { topic, item } = *self;
         T::endpoint(svc).publish(&topic, item);
     }
@@ -245,13 +247,12 @@ where
 }
 
 #[async_trait]
-impl<S, T, R> EnvelopProxy<S, R> for SubscribeAllTopicEnvelope<T, R>
+impl<S, T> EnvelopProxy<S> for SubscribeAllTopicEnvelope<T, S::Runtime>
 where
-    S: RuntimedService<R>,
-    T: Topic + RoutedTopic<S, R>,
-    R: Runtime,
+    S: RuntimedService,
+    T: Topic + RoutedTopic<S>,
 {
-    async fn handle(self: Box<Self>, svc: &mut S, _ctx: &mut Context<S, S::Stream, R>) {
+    async fn handle(self: Box<Self>, svc: &mut S, _ctx: &mut Context<S>) {
         let Self {
             topic,
             result_channel,

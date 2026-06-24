@@ -14,16 +14,15 @@ pub trait Topic: Ord + Clone + Send + 'static {
 ///
 /// This is the key piece that replaces Any/TypeId routing:
 /// each topic knows where its endpoint lives on service S.
-pub trait RoutedTopic<S, R>: Topic
+pub trait RoutedTopic<S>: Topic
 where
-    S: RuntimedService<R>,
-    R: Runtime,
+    S: RuntimedService,
 {
     /// Returns this topic's [`TopicEndpoint`] on `service`.
     ///
     /// Implementations should consistently point at the same logical field on `S` so
     /// routing matches how the service stores topic state.
-    fn endpoint(service: &mut S) -> &mut TopicEndpoint<Self, R>
+    fn endpoint(service: &mut S) -> &mut TopicEndpoint<Self, S::Runtime>
     where
         Self: Sized;
 }

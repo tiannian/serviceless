@@ -1,31 +1,27 @@
 use futures_util::{
     stream::{empty, select, Empty, Select},
-    Stream, StreamExt,
+    StreamExt,
 };
-use std::{future::Future, marker::PhantomData};
+use std::future::Future;
 
 use crate::{
-    runtime::{Runtime, UnboundedReceiver, UnboundedSender},
+    runtime::{Runtime, Spawner, UnboundedReceiver, UnboundedSender},
     Envelope, Error, RoutedTopic, RuntimedService, RuntimedServiceAddress, Topic,
 };
 
 /// Context to run service
-pub struct Context<S, T, R>
+pub struct Context<S>
 where
-    S: RuntimedService<R>,
-    T: Stream<Item = Envelope<S, R>> + Unpin,
-    R: Runtime,
+    S: RuntimedService,
 {
-    sender: R::UnboundedSender<Envelope<S, R>>,
-    receiver: Select<R::UnboundedReceiver<Envelope<S, R>>, T>,
-    marker_runtime: PhantomData<R>,
-    tasks: R::Spawner<Result<(), S::Error>>,
+    sender: <S::Runtime as Runtime>::UnboundedSender<Envelope<S>>,
+    receiver: Select<<S::Runtime as Runtime>::UnboundedReceiver<Envelope<S>>, S::Stream>,
+    tasks: <S::Runtime as Runtime>::Spawner<Result<(), S::Error>>,
 }
 
-impl<S, R> Default for Context<S, Empty<Envelope<S, R>>, R>
+impl<S> Default for Context<S>
 where
-    S: RuntimedService<R>,
-    R: Runtime,
+    S: RuntimedService<Stream = Empty<Envelope<S>>>,
 {
     /// Equivalent to [`Context::new`].
     fn default() -> Self {
@@ -33,10 +29,9 @@ where
     }
 }
 
-impl<S, R> Context<S, Empty<Envelope<S, R>>, R>
+impl<S> Context<S>
 where
-    S: RuntimedService<R>,
-    R: Runtime,
+    S: RuntimedService<Stream = Empty<Envelope<S>>>,
 {
     /// Create an empty context
     pub fn new() -> Self {
@@ -44,21 +39,18 @@ where
     }
 }
 
-impl<S, T, R> Context<S, T, R>
+impl<S> Context<S>
 where
-    S: RuntimedService<R>,
-    T: Stream<Item = Envelope<S, R>> + Unpin,
-    R: Runtime,
+    S: RuntimedService,
 {
     /// Create a context with an additional stream of envelopes.
-    pub fn with_stream(stream: T) -> Self {
-        let (sender, receiver) = R::unbounded();
+    pub fn with_stream(stream: S::Stream) -> Self {
+        let (sender, receiver) = <S::Runtime as Runtime>::unbounded();
 
         Self {
             sender,
             receiver: select(receiver, stream),
-            marker_runtime: PhantomData,
-            tasks: R::spawner(),
+            tasks: <S::Runtime as Runtime>::spawner(),
         }
     }
 
@@ -66,17 +58,16 @@ where
     ///
     /// Even if service not start, you can also get an address.
     /// But if you send message, the message maybe lost.
-    pub fn addr(&self) -> RuntimedServiceAddress<S, R> {
+    pub fn addr(&self) -> RuntimedServiceAddress<S> {
         RuntimedServiceAddress {
             sender: self.sender.clone(),
         }
     }
 
     /// Get a publish handle
-    pub fn publish_handle(&self) -> PublishHandle<S, R>
+    pub fn publish_handle(&self) -> PublishHandle<S>
     where
-        S: RuntimedService<R>,
-        R: Runtime,
+        S: RuntimedService,
     {
         PublishHandle {
             sender: self.sender.clone(),
@@ -93,21 +84,19 @@ where
     ///
     /// Incoming mail from [`ServiceAddress`] is merged with this stream internally;
     /// it is not exposed here—only the user half `T` is.
-    pub fn stream(&mut self) -> &mut T {
+    pub fn stream(&mut self) -> &mut S::Stream {
         let (_, stream) = self.receiver.get_mut();
         stream
     }
 
-    pub fn spawner(&mut self) -> &mut R::Spawner<Result<(), S::Error>> {
+    pub fn spawner(&mut self) -> &mut impl Spawner<Result<(), S::Error>> {
         &mut self.tasks
     }
 }
 
-impl<S, T, R> Context<S, T, R>
+impl<S> Context<S>
 where
-    S: RuntimedService<R, Stream = T> + Send + Sized,
-    T: Stream<Item = Envelope<S, R>> + Unpin + Send,
-    R: Runtime,
+    S: RuntimedService,
 {
     /// Start an service
     ///
@@ -117,7 +106,7 @@ where
         self,
         service: S,
     ) -> (
-        RuntimedServiceAddress<S, R>,
+        RuntimedServiceAddress<S>,
         impl Future<Output = Result<(), S::Error>> + Send,
     ) {
         let mut this = self;
@@ -140,28 +129,26 @@ where
     }
 }
 
-pub struct PublishHandle<S, R>
+pub struct PublishHandle<S>
 where
-    S: RuntimedService<R>,
-    R: Runtime,
+    S: RuntimedService,
 {
-    pub(crate) sender: R::UnboundedSender<Envelope<S, R>>,
+    pub(crate) sender: <S::Runtime as Runtime>::UnboundedSender<Envelope<S>>,
 }
 
-impl<S, R> PublishHandle<S, R>
+impl<S> PublishHandle<S>
 where
-    S: RuntimedService<R>,
-    R: Runtime,
+    S: RuntimedService,
 {
     /// Publish one item to a specific topic value.
     ///
     /// The actual delivery is still serialized through the service mailbox.
     pub fn publish<TopicT>(&self, topic: TopicT, item: TopicT::Item) -> Result<(), Error>
     where
-        TopicT: Topic + RoutedTopic<S, R>,
-        S: RuntimedService<R>,
+        TopicT: Topic + RoutedTopic<S>,
+        S: RuntimedService,
     {
-        let env = Envelope::<S, R>::new_publish_topic::<TopicT>(topic, item);
+        let env = Envelope::<S>::new_publish_topic::<TopicT>(topic, item);
 
         self.sender.send(env).map_err(|_| Error::ServiceStoped)?;
 
