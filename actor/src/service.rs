@@ -14,7 +14,7 @@ pub trait RuntimedService<R: Runtime>: Send + Sized + 'static {
     /// Extra envelope stream merged with the internal mailbox (see [`Context::with_stream`]).
     type Stream: Stream<Item = Envelope<Self, R>> + Unpin + Send;
 
-    type Error;
+    type Error: Send;
 
     fn metadata(&self) -> Metadata<'_>;
 

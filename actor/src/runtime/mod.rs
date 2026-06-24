@@ -37,7 +37,9 @@ pub trait Runtime: Send + 'static {
 
     type Spawner<T>: Spawner<T, Error = Self::Error>
     where
-        T: Send;
+        T: Send + 'static;
 
-    fn spawner<T>() -> Self::Spawner<T>;
+    fn spawner<T>() -> Self::Spawner<T>
+    where
+        T: Send + 'static;
 }
