@@ -18,9 +18,8 @@ impl<S, R> Envelope<S, R> {
     /// Wrap a message for fire-and-forget delivery (no result sent to a caller).
     pub fn new<M>(message: M) -> Self
     where
-        M: Message + Send + 'static,
-        S: RuntimedHandler<M, R> + Send,
-        M::Result: Send,
+        M: Message,
+        S: RuntimedHandler<M, R>,
         R: Runtime,
     {
         Self::Message(Box::new(EnvelopWithMessage::new(message, None)))
@@ -34,9 +33,8 @@ impl<S, R> Envelope<S, R> {
         result_channel: Option<R::OneshotSender<M::Result>>,
     ) -> Self
     where
-        S: RuntimedHandler<M, R> + Send,
-        M: Message + Send + 'static,
-        M::Result: Send,
+        S: RuntimedHandler<M, R>,
+        M: Message,
         R: Runtime,
     {
         Self::Message(Box::new(EnvelopWithMessage::new(message, result_channel)))
@@ -58,7 +56,7 @@ impl<S, R> Envelope<S, R> {
     /// Publish one item to a specific topic value.
     pub fn new_publish_topic<T>(topic: T, item: T::Item) -> Self
     where
-        S: RuntimedService<R> + Send,
+        S: RuntimedService<R>,
         T: Topic + RoutedTopic<S, R>,
         R: Runtime,
     {
@@ -142,9 +140,8 @@ where
 #[async_trait]
 impl<S, M, R> EnvelopProxy<S, R> for EnvelopWithMessage<M, R>
 where
-    M: Message + Send + 'static,
-    S: RuntimedHandler<M, R> + Send,
-    M::Result: Send,
+    M: Message,
+    S: RuntimedHandler<M, R>,
     R: Runtime,
 {
     async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut Context<S, S::Stream, R>) {
@@ -181,7 +178,7 @@ where
 #[async_trait]
 impl<S, T, R> EnvelopProxy<S, R> for SubscribeTopicEnvelope<T, R>
 where
-    S: RuntimedService<R> + Send,
+    S: RuntimedService<R>,
     T: Topic + RoutedTopic<S, R>,
     R: Runtime,
 {
@@ -214,7 +211,7 @@ where
 #[async_trait]
 impl<S, T, R> EnvelopProxy<S, R> for PublishTopicEnvelope<T>
 where
-    S: RuntimedService<R> + Send,
+    S: RuntimedService<R>,
     T: Topic + RoutedTopic<S, R>,
     R: Runtime,
 {
@@ -249,7 +246,7 @@ where
 #[async_trait]
 impl<S, T, R> EnvelopProxy<S, R> for SubscribeAllTopicEnvelope<T, R>
 where
-    S: RuntimedService<R> + Send,
+    S: RuntimedService<R>,
     T: Topic + RoutedTopic<S, R>,
     R: Runtime,
 {

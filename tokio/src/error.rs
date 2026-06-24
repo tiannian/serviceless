@@ -6,4 +6,6 @@ pub enum Error {
     UnboundedChannelClosed,
     #[error("Oneshot channel closed")]
     OneshotChannelClosed,
+    #[error("Spawner join error")]
+    JoinError(#[from] tokio::task::JoinError),
 }

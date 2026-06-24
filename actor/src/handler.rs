@@ -29,7 +29,7 @@ where
 }
 
 /// Message
-pub trait Message {
+pub trait Message: Send + 'static {
     /// Result of message
-    type Result;
+    type Result: Send;
 }

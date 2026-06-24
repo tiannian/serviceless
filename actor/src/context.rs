@@ -5,23 +5,26 @@ use futures_util::{
 use std::{future::Future, marker::PhantomData};
 
 use crate::{
-    Envelope, Error, Result, RoutedTopic, Runtime, RuntimedService, RuntimedServiceAddress, Topic,
+    Envelope, Error, RoutedTopic, Runtime, RuntimedService, RuntimedServiceAddress, Topic,
     UnboundedReceiver, UnboundedSender,
 };
 
 /// Context to run service
 pub struct Context<S, T, R>
 where
+    S: RuntimedService<R>,
     T: Stream<Item = Envelope<S, R>> + Unpin,
     R: Runtime,
 {
     sender: R::UnboundedSender<Envelope<S, R>>,
     receiver: Select<R::UnboundedReceiver<Envelope<S, R>>, T>,
     marker_runtime: PhantomData<R>,
+    tasks: R::Spawner<Result<(), S::Error>>,
 }
 
 impl<S, R> Default for Context<S, Empty<Envelope<S, R>>, R>
 where
+    S: RuntimedService<R>,
     R: Runtime,
 {
     /// Equivalent to [`Context::new`].
@@ -32,6 +35,7 @@ where
 
 impl<S, R> Context<S, Empty<Envelope<S, R>>, R>
 where
+    S: RuntimedService<R>,
     R: Runtime,
 {
     /// Create an empty context
@@ -42,6 +46,7 @@ where
 
 impl<S, T, R> Context<S, T, R>
 where
+    S: RuntimedService<R>,
     T: Stream<Item = Envelope<S, R>> + Unpin,
     R: Runtime,
 {
@@ -53,6 +58,7 @@ where
             sender,
             receiver: select(receiver, stream),
             marker_runtime: PhantomData,
+            tasks: R::spawner(),
         }
     }
 
@@ -91,6 +97,10 @@ where
         let (_, stream) = self.receiver.get_mut();
         stream
     }
+
+    pub fn spawner(&mut self) -> &mut R::Spawner<Result<(), S::Error>> {
+        &mut self.tasks
+    }
 }
 
 impl<S, T, R> Context<S, T, R>
@@ -108,7 +118,7 @@ where
         service: S,
     ) -> (
         RuntimedServiceAddress<S, R>,
-        impl Future<Output = ()> + Send,
+        impl Future<Output = Result<(), S::Error>> + Send,
     ) {
         let mut this = self;
 
@@ -117,11 +127,13 @@ where
         let mut service = service;
 
         let future = async move {
-            service.started(&mut this).await;
+            service.started(&mut this).await?;
             while let Some(e) = this.receiver.next().await {
                 e.handle(&mut service, &mut this).await;
             }
-            service.stopped(&mut this).await;
+            service.stopped(&mut this).await?;
+
+            Ok(())
         };
 
         (address, future)
@@ -144,7 +156,7 @@ where
     /// Publish one item to a specific topic value.
     ///
     /// The actual delivery is still serialized through the service mailbox.
-    pub fn publish<TopicT>(&self, topic: TopicT, item: TopicT::Item) -> Result<()>
+    pub fn publish<TopicT>(&self, topic: TopicT, item: TopicT::Item) -> Result<(), Error>
     where
         TopicT: Topic + RoutedTopic<S, R>,
         S: RuntimedService<R>,

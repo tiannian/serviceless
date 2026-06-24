@@ -3,7 +3,7 @@ use std::future::Future;
 use async_trait::async_trait;
 
 #[async_trait]
-pub trait Spawner<T> {
+pub trait Spawner<T>: Send {
     type Error;
 
     type TaskHandle: TaskHandle;

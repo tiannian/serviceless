@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 serviceless-actor = { workspace = true }
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["sync", "rt"] }
 futures-core = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
