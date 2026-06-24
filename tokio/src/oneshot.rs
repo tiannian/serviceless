@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use serviceless_actor::{InnerOp, OneshotReceiver, OneshotSender};
+use serviceless_actor::runtime::{InnerOp, OneshotReceiver, OneshotSender};
 use tokio::sync::oneshot;
 
 use crate::Error;

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use serviceless_actor::{Spawner, TaskHandle};
+use serviceless_actor::runtime::{Spawner, TaskHandle};
 use tokio::task::{AbortHandle, JoinSet};
 
 use crate::Error;

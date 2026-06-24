@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use futures_core::Stream;
 
-use crate::InnerOp;
+use crate::runtime::InnerOp;
 
 pub trait UnboundedSender<T>: InnerOp + Clone + Send {
     type Error;

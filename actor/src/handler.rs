@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::{Context, ReplyHandle, Runtime, RuntimedService};
+use crate::{runtime::Runtime, Context, ReplyHandle, RuntimedService};
 
 /// Handler message on service
 #[async_trait]

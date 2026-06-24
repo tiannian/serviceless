@@ -5,7 +5,7 @@ use std::{
 
 use async_trait::async_trait;
 use futures_core::Stream;
-use serviceless_actor::{InnerOp, UnboundedReceiver, UnboundedSender};
+use serviceless_actor::runtime::{InnerOp, UnboundedReceiver, UnboundedSender};
 use tokio::sync::mpsc;
 
 use crate::Error;

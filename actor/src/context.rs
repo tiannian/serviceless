@@ -5,8 +5,8 @@ use futures_util::{
 use std::{future::Future, marker::PhantomData};
 
 use crate::{
-    Envelope, Error, RoutedTopic, Runtime, RuntimedService, RuntimedServiceAddress, Topic,
-    UnboundedReceiver, UnboundedSender,
+    runtime::{Runtime, UnboundedReceiver, UnboundedSender},
+    Envelope, Error, RoutedTopic, RuntimedService, RuntimedServiceAddress, Topic,
 };
 
 /// Context to run service

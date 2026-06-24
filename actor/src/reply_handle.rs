@@ -1,4 +1,7 @@
-use crate::{Error, Message, OneshotSender, Runtime};
+use crate::{
+    runtime::{OneshotSender, Runtime},
+    Error, Message,
+};
 
 pub struct ReplyHandle<M, R>
 where

@@ -79,8 +79,7 @@
 mod metadata;
 pub use metadata::*;
 
-mod runtime;
-pub use runtime::*;
+pub mod runtime;
 
 mod service;
 pub use service::*;

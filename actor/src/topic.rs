@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
 
-use crate::{OneshotSender, Runtime, RuntimedService, UnboundedSender};
+use crate::{
+    runtime::{OneshotSender, Runtime, UnboundedSender},
+    RuntimedService,
+};
 
 /// A typed pub/sub topic.
 pub trait Topic: Ord + Clone + Send + 'static {

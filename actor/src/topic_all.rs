@@ -6,7 +6,10 @@ use std::{
 use futures_core::Stream;
 use futures_util::StreamExt;
 
-use crate::{Runtime, Topic, UnboundedReceiver};
+use crate::{
+    runtime::{Runtime, UnboundedReceiver},
+    Topic,
+};
 
 pub struct TopicAllHandle<T: Topic, R>
 where

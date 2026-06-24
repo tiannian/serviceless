@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::InnerOp;
+use crate::runtime::InnerOp;
 
 pub trait OneshotSender<T>: InnerOp + Send {
     type Error;

@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 
 use crate::{
-    Context, Message, ReplyHandle, RoutedTopic, Runtime, RuntimedHandler, RuntimedService, Topic,
+    runtime::Runtime, Context, Message, ReplyHandle, RoutedTopic, RuntimedHandler, RuntimedService,
+    Topic,
 };
 
 /// Type-erased mailbox item for service `S`: a typed message dispatch or a topic operation.

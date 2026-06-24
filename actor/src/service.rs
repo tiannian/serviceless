@@ -3,7 +3,7 @@ use futures_core::Stream;
 use futures_util::stream::Empty;
 use std::future::Future;
 
-use crate::{Context, Envelope, Metadata, Runtime, RuntimedServiceAddress};
+use crate::{runtime::Runtime, Context, Envelope, Metadata, RuntimedServiceAddress};
 
 /// [`Empty`] stream of [`Envelope`] for [`Context::new`] when there is no extra envelope source.
 pub type EmptyStream<S, R> = Empty<Envelope<S, R>>;
