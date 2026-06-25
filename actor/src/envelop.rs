@@ -19,8 +19,9 @@ impl<S> Envelope<S> {
     /// Wrap a message for fire-and-forget delivery (no result sent to a caller).
     pub fn new<M>(message: M) -> Self
     where
-        M: Message,
+        M: Message + Send + 'static,
         S: Handler<M>,
+        M::Result: Send,
     {
         Self::Message(Box::new(EnvelopWithMessage::<M, S::Runtime>::new(
             message, None,
@@ -36,7 +37,8 @@ impl<S> Envelope<S> {
     ) -> Self
     where
         S: Handler<M>,
-        M: Message,
+        M: Message + Send + 'static,
+        M::Result: Send,
     {
         Self::Message(Box::new(EnvelopWithMessage::<M, S::Runtime>::new(
             message,
@@ -123,7 +125,8 @@ pub trait EnvelopProxy<S: RuntimedService> {
 
 pub(crate) struct EnvelopWithMessage<M, R>
 where
-    M: Message,
+    M: Message + Send + 'static,
+    M::Result: Send,
     R: Runtime,
 {
     message: M,
@@ -132,7 +135,8 @@ where
 
 impl<M, R> EnvelopWithMessage<M, R>
 where
-    M: Message,
+    M: Message + Send + 'static,
+    M::Result: Send,
     R: Runtime,
 {
     pub(crate) fn new(message: M, result_channel: Option<R::OneshotSender<M::Result>>) -> Self {
@@ -146,7 +150,8 @@ where
 #[async_trait]
 impl<S, M> EnvelopProxy<S> for EnvelopWithMessage<M, S::Runtime>
 where
-    M: Message,
+    M: Message + Send + 'static,
+    M::Result: Send,
     S: Handler<M>,
 {
     async fn handle(mut self: Box<Self>, svc: &mut S, ctx: &mut Context<S>) {

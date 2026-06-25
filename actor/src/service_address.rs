@@ -51,6 +51,7 @@ where
     pub async fn call<M>(&self, message: M) -> Result<M::Result>
     where
         M: Message + Send + 'static,
+        M::Result: Send,
         S: Handler<M>,
     {
         let (sender, receiver) = <S::Runtime as Runtime>::oneshot::<M::Result>();
@@ -68,6 +69,7 @@ where
     pub fn send<M>(&self, message: M) -> Result<()>
     where
         M: Message + Send + 'static,
+        M::Result: Send,
         S: Handler<M>,
     {
         let env = Envelope::new(message);

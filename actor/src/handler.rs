@@ -28,7 +28,7 @@ where
 }
 
 /// Message
-pub trait Message: Send + 'static {
+pub trait Message {
     /// Result of message
-    type Result: Send;
+    type Result;
 }

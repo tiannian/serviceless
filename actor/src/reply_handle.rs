@@ -5,7 +5,8 @@ use crate::{
 
 pub struct RuntimedReplyHandle<M, R>
 where
-    M: Message,
+    M: Message + Send + 'static,
+    M::Result: Send,
     R: Runtime,
 {
     sender: Option<R::OneshotSender<M::Result>>,
@@ -13,7 +14,8 @@ where
 
 impl<M, R> RuntimedReplyHandle<M, R>
 where
-    M: Message,
+    M: Message + Send + 'static,
+    M::Result: Send,
     R: Runtime,
 {
     pub(crate) fn new(sender: Option<R::OneshotSender<M::Result>>) -> Self {
