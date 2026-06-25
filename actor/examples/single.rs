@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use serviceless::{Context, EmptyStream, Handler, Message, Service};
+use serviceless::{Context, EmptyStream, Handler, Message, Metadata, Service};
 
 #[derive(Debug, Default)]
 pub struct Service0 {}
@@ -8,12 +8,20 @@ pub struct Service0 {}
 impl Service for Service0 {
     type Stream = EmptyStream<Self>;
 
-    async fn started(&mut self, _ctx: &mut Context<Self, Self::Stream>) {
-        println!("Started")
+    type Error = ();
+
+    fn metadata(&self) -> Metadata<'_> {
+        Metadata { name: "service0" }
     }
 
-    async fn stopped(&mut self, _ctx: &mut Context<Self, Self::Stream>) {
-        println!("Stopped")
+    async fn started(&mut self, _ctx: &mut Context<Self>) -> Result<(), Self::Error> {
+        println!("Started");
+        Ok(())
+    }
+
+    async fn stopped(&mut self, _ctx: &mut Context<Self>) -> Result<(), Self::Error> {
+        println!("Stopped");
+        Ok(())
     }
 }
 
@@ -26,7 +34,7 @@ impl Message for U8 {
 
 #[async_trait]
 impl Handler<U8> for Service0 {
-    async fn handle(&mut self, message: U8, _ctx: &mut Context<Self, Self::Stream>) -> U8 {
+    async fn handle(&mut self, message: U8, _ctx: &mut Context<Self>) -> U8 {
         U8(message.0 + 2)
     }
 }
@@ -40,7 +48,7 @@ impl Message for U16 {
 
 #[async_trait]
 impl Handler<U16> for Service0 {
-    async fn handle(&mut self, message: U16, _ctx: &mut Context<Self, Self::Stream>) -> U16 {
+    async fn handle(&mut self, message: U16, _ctx: &mut Context<Self>) -> U16 {
         U16(message.0 + 300)
     }
 }
@@ -51,7 +59,7 @@ async fn main() {
 
     let ctx = Context::new();
 
-    let (service_addr, future) = srv.start_by_context(ctx);
+    let (service_addr, future) = ctx.run(srv, None);
     let service_handle = tokio::spawn(future);
 
     // Test ServiceAddress with multiple message types
@@ -62,31 +70,6 @@ async fn main() {
     let res = service_addr.call(U16(8)).await.unwrap();
     println!("ServiceAddress call U16(8): {:?}", res);
 
-    // Test Address<M> for specific message types
-    println!("\n=== Testing Address<U8> ===");
-    let (addr_u8, forward_future_u8) = service_addr.clone().into_address::<U8>();
-    tokio::spawn(forward_future_u8);
-
-    let res = addr_u8.call(U8(10)).await.unwrap();
-    println!("Address<U8> call U8(10): {:?}", res);
-
-    addr_u8.send(U8(20)).unwrap();
-    println!("Address<U8> send U8(20): success");
-
-    println!("\n=== Testing Address<U16> ===");
-    let (addr_u16, forward_future_u16) = service_addr.clone().into_address::<U16>();
-    tokio::spawn(forward_future_u16);
-
-    let res = addr_u16.call(U16(100)).await.unwrap();
-    println!("Address<U16> call U16(100): {:?}", res);
-
-    addr_u16.send(U16(200)).unwrap();
-    println!("Address<U16> send U16(200): success");
-
-    // Test that Address<U8> can only send U8 messages (type safety)
-    // This would cause a compile error if we tried:
-    // addr_u8.call(U16(8)).await;  // Compile error: expected U8, found U16
-
     // Test close_service method
     println!("\n=== Testing close_service ===");
     assert!(
@@ -95,14 +78,18 @@ async fn main() {
     );
     service_addr.close_service();
     assert!(
-        service_addr.is_stop(),
-        "Service should be stopped after close_service"
+        !service_addr.is_stop(),
+        "Service should not be stopped immediately after close_service (still running)"
     );
-    println!("close_service called successfully, service is now stopped");
+    println!("close_service called, service still running");
 
     // Wait for the service future to complete, which will call stopped hook
     println!("Waiting for service to stop and call stopped hook...");
-    service_handle.await.unwrap();
+    service_handle.await.expect("service join failed").unwrap();
+    assert!(
+        service_addr.is_stop(),
+        "Service should be stopped after the service future completes"
+    );
     println!("Service future completed, stopped hook should have been called");
 
     // Verify that sending messages after close fails

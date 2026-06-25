@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use serviceless::{
-    Context, EmptyStream, Handler, Message, ReplyHandle, RoutedTopic, Service, Topic, TopicEndpoint,
+    Context, EmptyStream, Handler, Message, Metadata, ReplyHandle, RoutedTopic, Service, Topic,
+    TopicEndpoint,
 };
 
 #[derive(Default)]
@@ -13,6 +14,12 @@ struct TestActor {
 #[async_trait]
 impl Service for TestActor {
     type Stream = EmptyStream<Self>;
+
+    type Error = ();
+
+    fn metadata(&self) -> Metadata<'_> {
+        Metadata { name: "test_actor" }
+    }
 }
 
 struct Add(i32);
@@ -22,7 +29,7 @@ impl Message for Add {
 
 #[async_trait]
 impl Handler<Add> for TestActor {
-    async fn handle(&mut self, msg: Add, _ctx: &mut Context<Self, Self::Stream>) -> i32 {
+    async fn handle(&mut self, msg: Add, _ctx: &mut Context<Self>) -> i32 {
         self.value += msg.0;
         self.value
     }
@@ -35,7 +42,7 @@ impl Message for Get {
 
 #[async_trait]
 impl Handler<Get> for TestActor {
-    async fn handle(&mut self, _msg: Get, _ctx: &mut Context<Self, Self::Stream>) -> i32 {
+    async fn handle(&mut self, _msg: Get, _ctx: &mut Context<Self>) -> i32 {
         self.value
     }
 }
@@ -47,11 +54,7 @@ impl Message for PreferredUsed {
 
 #[async_trait]
 impl Handler<PreferredUsed> for TestActor {
-    async fn handle(
-        &mut self,
-        _msg: PreferredUsed,
-        _ctx: &mut Context<Self, Self::Stream>,
-    ) -> bool {
+    async fn handle(&mut self, _msg: PreferredUsed, _ctx: &mut Context<Self>) -> bool {
         self.preferred_used
     }
 }
@@ -63,7 +66,7 @@ impl Message for PreferredAdd {
 
 #[async_trait]
 impl Handler<PreferredAdd> for TestActor {
-    async fn handle(&mut self, msg: PreferredAdd, _ctx: &mut Context<Self, Self::Stream>) -> i32 {
+    async fn handle(&mut self, msg: PreferredAdd, _ctx: &mut Context<Self>) -> i32 {
         self.value += msg.0;
         self.value
     }
@@ -71,7 +74,7 @@ impl Handler<PreferredAdd> for TestActor {
     async fn handle_preferred(
         &mut self,
         msg: PreferredAdd,
-        _ctx: &mut Context<Self, Self::Stream>,
+        _ctx: &mut Context<Self>,
         handle: ReplyHandle<PreferredAdd>,
     ) {
         self.preferred_used = true;
@@ -107,14 +110,14 @@ impl Message for PublishNumber {
 
 #[async_trait]
 impl Handler<PublishNumber> for TestActor {
-    async fn handle(&mut self, msg: PublishNumber, ctx: &mut Context<Self, Self::Stream>) {
+    async fn handle(&mut self, msg: PublishNumber, ctx: &mut Context<Self>) {
         let _ = ctx.publish_handle().publish(msg.topic, msg.value);
     }
 }
 
 #[tokio::test]
 async fn call_and_send_update_actor_state() {
-    let (addr, run) = TestActor::default().start_by_context(Context::new());
+    let (addr, run) = Context::new().run(TestActor::default(), None);
     let runner = tokio::spawn(run);
 
     let v = addr.call(Add(2)).await.expect("call add should succeed");
@@ -125,12 +128,12 @@ async fn call_and_send_update_actor_state() {
     assert_eq!(final_value, 5);
 
     addr.close_service();
-    runner.await.expect("service task should finish");
+    runner.await.expect("service task should finish").unwrap();
 }
 
 #[tokio::test]
 async fn preferred_handler_path_is_used_for_preferred_messages() {
-    let (addr, run) = TestActor::default().start_by_context(Context::new());
+    let (addr, run) = Context::new().run(TestActor::default(), None);
     let runner = tokio::spawn(run);
 
     let v = addr
@@ -149,36 +152,12 @@ async fn preferred_handler_path_is_used_for_preferred_messages() {
     assert!(used);
 
     addr.close_service();
-    runner.await.expect("service task should finish");
-}
-
-#[tokio::test]
-async fn into_address_forwards_messages_to_service() {
-    let (addr, run) = TestActor::default().start_by_context(Context::new());
-    let runner = tokio::spawn(run);
-
-    let (typed_addr, forward) = addr.clone().into_address::<Add>();
-    let forwarder = tokio::spawn(forward);
-
-    let v = typed_addr
-        .call(Add(4))
-        .await
-        .expect("typed call should succeed");
-    assert_eq!(v, 4);
-
-    let state = addr.call(Get).await.expect("get should succeed");
-    assert_eq!(state, 4);
-
-    drop(typed_addr);
-    addr.close_service();
-
-    forwarder.await.expect("forwarder task should finish");
-    runner.await.expect("service task should finish");
+    runner.await.expect("service task should finish").unwrap();
 }
 
 #[tokio::test]
 async fn subscribe_receives_published_topic_item() {
-    let (addr, run) = TestActor::default().start_by_context(Context::new());
+    let (addr, run) = Context::new().run(TestActor::default(), None);
     let runner = tokio::spawn(run);
 
     let sub_addr = addr.clone();
@@ -201,12 +180,12 @@ async fn subscribe_receives_published_topic_item() {
     assert_eq!(published, 42);
 
     addr.close_service();
-    runner.await.expect("service task should finish");
+    runner.await.expect("service task should finish").unwrap();
 }
 
 #[tokio::test]
 async fn subscribe_all_receives_every_publish_for_topic() {
-    let (addr, run) = TestActor::default().start_by_context(Context::new());
+    let (addr, run) = Context::new().run(TestActor::default(), None);
     let runner = tokio::spawn(run);
 
     let mut handle = addr
@@ -230,12 +209,12 @@ async fn subscribe_all_receives_every_publish_for_topic() {
     assert_eq!(handle.recv().await, Some(2));
 
     addr.close_service();
-    runner.await.expect("service task should finish");
+    runner.await.expect("service task should finish").unwrap();
 }
 
 #[tokio::test]
 async fn subscribe_all_only_receives_matching_topic_key() {
-    let (addr, run) = TestActor::default().start_by_context(Context::new());
+    let (addr, run) = Context::new().run(TestActor::default(), None);
     let runner = tokio::spawn(run);
 
     let mut handle = addr
@@ -258,5 +237,5 @@ async fn subscribe_all_only_receives_matching_topic_key() {
     assert_eq!(handle.recv().await, Some(42));
 
     addr.close_service();
-    runner.await.expect("service task should finish");
+    runner.await.expect("service task should finish").unwrap();
 }

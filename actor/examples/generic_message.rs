@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use serviceless::{Context, EmptyStream, Handler, Message, Service};
+use serviceless::{Context, EmptyStream, Handler, Message, Metadata, Service};
 
 #[derive(Debug, Default)]
 pub struct Service0 {}
@@ -8,32 +8,36 @@ pub struct Service0 {}
 impl Service for Service0 {
     type Stream = EmptyStream<Self>;
 
-    async fn started(&mut self, _ctx: &mut Context<Self, Self::Stream>) {
-        println!("Started")
+    type Error = ();
+
+    fn metadata(&self) -> Metadata<'_> {
+        Metadata { name: "service0" }
     }
 
-    async fn stopped(&mut self, _ctx: &mut Context<Self, Self::Stream>) {
-        println!("Stopped")
+    async fn started(&mut self, _ctx: &mut Context<Self>) -> Result<(), Self::Error> {
+        println!("Started");
+        Ok(())
+    }
+
+    async fn stopped(&mut self, _ctx: &mut Context<Self>) -> Result<(), Self::Error> {
+        println!("Stopped");
+        Ok(())
     }
 }
 
 /// Generic message that requires Debug trait bound
 #[derive(Debug)]
-pub struct GenericMessage<T: std::fmt::Debug> {
+pub struct GenericMessage<T: std::fmt::Debug + Send + 'static> {
     pub data: T,
 }
 
-impl<T: std::fmt::Debug> Message for GenericMessage<T> {
+impl<T: std::fmt::Debug + Send + 'static> Message for GenericMessage<T> {
     type Result = u8;
 }
 
 #[async_trait]
 impl<T: std::fmt::Debug + Send + 'static> Handler<GenericMessage<T>> for Service0 {
-    async fn handle(
-        &mut self,
-        message: GenericMessage<T>,
-        _ctx: &mut Context<Self, Self::Stream>,
-    ) -> u8 {
+    async fn handle(&mut self, message: GenericMessage<T>, _ctx: &mut Context<Self>) -> u8 {
         println!("Received generic message: {:?}", message);
         1
     }
@@ -45,7 +49,7 @@ async fn main() {
 
     let ctx = Context::new();
 
-    let (service_addr, future) = srv.start_by_context(ctx);
+    let (service_addr, future) = ctx.run(srv, None);
     let service_handle = tokio::spawn(future);
 
     // Test with different types
@@ -71,7 +75,7 @@ async fn main() {
     // Close service
     println!("\n=== Closing service ===");
     service_addr.close_service();
-    service_handle.await.unwrap();
+    service_handle.await.expect("service join failed").unwrap();
 
     println!("\n=== All tests completed ===");
 }

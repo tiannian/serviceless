@@ -1,5 +1,7 @@
 use async_trait::async_trait;
-use serviceless::{Context, Handler, RoutedTopic, Service, ServiceAddress, Topic, TopicEndpoint};
+use serviceless::{
+    Context, Handler, Metadata, RoutedTopic, Service, ServiceAddress, Topic, TopicEndpoint,
+};
 
 #[derive(Clone)]
 pub struct UserReady(pub String);
@@ -19,6 +21,12 @@ pub struct MyService {
 #[async_trait]
 impl Service for MyService {
     type Stream = serviceless::EmptyStream<Self>;
+
+    type Error = ();
+
+    fn metadata(&self) -> Metadata<'_> {
+        Metadata { name: "my_service" }
+    }
 }
 
 impl RoutedTopic<MyService> for UserReadyTopic {
@@ -35,7 +43,7 @@ impl serviceless::Message for DoWork {
 
 #[async_trait]
 impl Handler<DoWork> for MyService {
-    async fn handle(&mut self, _message: DoWork, ctx: &mut Context<Self, Self::Stream>) {
+    async fn handle(&mut self, _message: DoWork, ctx: &mut Context<Self>) {
         let _ = ctx.publish_handle().publish(
             UserReadyTopic("user-42".to_string()),
             UserReady("done".to_string()),
@@ -55,7 +63,7 @@ async fn demo(addr: ServiceAddress<MyService>) {
 #[tokio::main]
 async fn main() {
     let service = MyService::default();
-    let (addr, future) = service.start_by_context(Context::new());
+    let (addr, future) = Context::new().run(service, None);
     tokio::spawn(future);
     demo(addr).await;
 }

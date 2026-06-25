@@ -1,6 +1,6 @@
 [package]
 name = "serviceless"
-version = "0.4.4"
+version = "0.5.0"
 edition = "2021"
 description = "An simple actor model in rust, like actix"
 license = "MIT"
@@ -12,9 +12,18 @@ readme = "../README.md"
 async-trait = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
-service-channel = { path = "../channel", version = "^0.1.2" }
 futures-util = { workspace = true }
 futures-core = { workspace = true }
 
+tokio = { workspace = true, features = ["sync", "rt"] }
+
+prometheus-client = { workspace = true }
+
 [dev-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = [
+    "rt",
+    "sync",
+    "macros",
+    "rt-multi-thread",
+    "time",
+] }

@@ -1,0 +1,19 @@
+[package]
+name = "serviceless"
+version = "0.5.0"
+edition = "2024"
+
+[dependencies]
+serviceless-actor = { workspace = true }
+serviceless-tokio = { workspace = true }
+futures-core = { workspace = true }
+async-trait = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = [
+    "rt",
+    "sync",
+    "macros",
+    "rt-multi-thread",
+    "time",
+] }

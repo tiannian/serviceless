@@ -1,23 +1,23 @@
 use async_trait::async_trait;
 
-use crate::{Context, ReplyHandle, Service};
+use crate::{Context, RuntimedReplyHandle, RuntimedService};
 
 /// Handler message on service
 #[async_trait]
 pub trait Handler<M>
 where
-    Self: Service + Sized,
+    Self: RuntimedService + Sized,
     M: Message,
 {
     /// Handle message
-    async fn handle(&mut self, message: M, ctx: &mut Context<Self, Self::Stream>) -> M::Result;
+    async fn handle(&mut self, message: M, ctx: &mut Context<Self>) -> M::Result;
 
     /// Handle message
     async fn handle_preferred(
         &mut self,
         message: M,
-        ctx: &mut Context<Self, Self::Stream>,
-        handle: ReplyHandle<M>,
+        ctx: &mut Context<Self>,
+        handle: RuntimedReplyHandle<M, Self::Runtime>,
     ) where
         M: Send + 'static,
         M::Result: Send,
@@ -28,7 +28,7 @@ where
 }
 
 /// Message
-pub trait Message {
+pub trait Message: Send + 'static {
     /// Result of message
-    type Result;
+    type Result: Send;
 }
