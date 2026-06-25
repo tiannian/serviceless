@@ -20,4 +20,8 @@ pub trait UnboundedReceiver<T>: InnerOp + Stream<Item = T> + Unpin + Send {
     fn close(&mut self);
 
     fn len(&self) -> usize;
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }

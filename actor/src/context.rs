@@ -188,7 +188,7 @@ where
 
         if let Some(registry) = registry {
             let name = service.metadata().name;
-            this.metrics.register(&name, registry);
+            this.metrics.register(name, registry);
         }
 
         let address = this.addr();
