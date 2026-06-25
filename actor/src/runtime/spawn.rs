@@ -27,7 +27,7 @@ pub trait Spawner<T>: Send {
     async fn join_next(&mut self) -> Option<Result<T, Self::Error>>;
 }
 
-pub trait TaskHandle {
+pub trait TaskHandle: Send + Sync + 'static {
     fn abort(&self);
 
     fn is_finished(&self) -> bool;
