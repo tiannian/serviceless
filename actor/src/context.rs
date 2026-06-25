@@ -10,8 +10,7 @@ use prometheus_client::{
     },
     registry::Registry,
 };
-use std::future::Future;
-use tokio::time::Instant;
+use std::{future::Future, time::Instant};
 
 use crate::{
     runtime::{Runtime, Spawner, UnboundedReceiver, UnboundedSender},
@@ -214,9 +213,18 @@ where
                     .observe(duration.as_secs_f64());
 
                 this.metrics.processed_messages.inc();
+
+                let pending_tasks = this.tasks.len();
+                this.metrics.pending_tasks.set(pending_tasks as i64);
             }
 
+            let pending_tasks = this.tasks.len();
+            this.metrics.pending_tasks.set(pending_tasks as i64);
+
             service.stopped(&mut this).await?;
+
+            let pending_tasks = this.tasks.len();
+            this.metrics.pending_tasks.set(pending_tasks as i64);
 
             while this.tasks.join_next().await.is_some() {}
 
