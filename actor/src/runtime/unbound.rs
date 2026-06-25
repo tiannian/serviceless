@@ -3,7 +3,7 @@ use futures_core::Stream;
 
 use crate::runtime::InnerOp;
 
-pub trait UnboundedSender<T>: InnerOp + Clone + Send {
+pub trait UnboundedSender<T>: InnerOp + Clone + Send + Sync {
     type Error;
 
     fn send(&self, item: T) -> Result<(), Self::Error>;
@@ -12,7 +12,7 @@ pub trait UnboundedSender<T>: InnerOp + Clone + Send {
 }
 
 #[async_trait]
-pub trait UnboundedReceiver<T>: InnerOp + Stream<Item = T> + Unpin + Send {
+pub trait UnboundedReceiver<T>: InnerOp + Stream<Item = T> + Unpin + Send + Sync {
     type Error;
 
     async fn recv(&mut self) -> Result<T, Self::Error>;
