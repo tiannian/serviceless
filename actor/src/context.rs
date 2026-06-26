@@ -98,6 +98,10 @@ where
     pub fn new_with_registry(service: &S, registry: &mut Registry) -> Self {
         Self::with_stream(service, empty(), Some(registry))
     }
+
+    pub fn new_with_registry_opt(service: &S, registry: Option<&mut Registry>) -> Self {
+        Self::with_stream(service, empty(), registry)
+    }
 }
 
 impl<S> Context<S>
