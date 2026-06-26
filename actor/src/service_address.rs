@@ -63,6 +63,24 @@ where
         receiver.recv().await.map_err(|_| Error::ServiceStoped)
     }
 
+    pub fn call_raw<M>(
+        &self,
+        message: M,
+    ) -> Result<<S::Runtime as Runtime>::OneshotReceiver<M::Result>>
+    where
+        M: Message + Send + 'static,
+        M::Result: Send,
+        S: Handler<M>,
+    {
+        let (sender, receiver) = <S::Runtime as Runtime>::oneshot::<M::Result>();
+
+        let env = Envelope::new_with_result_channel(message, Some(sender));
+
+        self.sender.send(env).map_err(|_| Error::ServiceStoped)?;
+
+        Ok(receiver)
+    }
+
     /// Call service's handler without result
     ///
     /// Because this function don't need result, so it can call without async.
