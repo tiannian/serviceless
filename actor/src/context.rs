@@ -86,23 +86,17 @@ where
     stopped: bool,
 }
 
-impl<S> Default for Context<S>
-where
-    S: RuntimedService<Stream = Empty<Envelope<S>>>,
-{
-    /// Equivalent to [`Context::new`].
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<S> Context<S>
 where
     S: RuntimedService<Stream = Empty<Envelope<S>>>,
 {
     /// Create an empty context
-    pub fn new() -> Self {
-        Self::with_stream(empty())
+    pub fn new(service: &S) -> Self {
+        Self::with_stream(service, empty(), None)
+    }
+
+    pub fn new_with_registry(service: &S, registry: &mut Registry) -> Self {
+        Self::with_stream(service, empty(), Some(registry))
     }
 }
 
@@ -111,17 +105,25 @@ where
     S: RuntimedService,
 {
     /// Create a context with an additional stream of envelopes.
-    pub fn with_stream(stream: S::Stream) -> Self {
+    pub fn with_stream(service: &S, stream: S::Stream, registry: Option<&mut Registry>) -> Self {
         let (sender, receiver) = <S::Runtime as Runtime>::unbounded();
 
-        Self {
+        let ctx: Context<S> = Self {
             sender,
             receiver: select(receiver, stream),
             tasks: <S::Runtime as Runtime>::spawner(),
 
             metrics: Metrics::new(),
             stopped: false,
+        };
+
+        let metadata = service.metadata();
+
+        if let Some(registry) = registry {
+            ctx.metrics.register(&metadata.name, registry);
         }
+
+        ctx
     }
 
     /// Get service's address
@@ -184,17 +186,11 @@ where
     pub fn run(
         self,
         service: S,
-        registry: Option<&mut Registry>,
     ) -> (
         ServiceAddress<S>,
         impl Future<Output = Result<(), S::Error>> + Send,
     ) {
         let mut this = self;
-
-        if let Some(registry) = registry {
-            let name = service.metadata().name;
-            this.metrics.register(name, registry);
-        }
 
         let address = this.addr();
 

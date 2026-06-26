@@ -47,9 +47,9 @@ impl<T: std::fmt::Debug + Send + 'static> Handler<GenericMessage<T>> for Service
 async fn main() {
     let srv = Service0::default();
 
-    let ctx = Context::new();
+    let ctx = Context::new(&srv);
 
-    let (service_addr, future) = ctx.run(srv, None);
+    let (service_addr, future) = ctx.run(srv);
     let service_handle = tokio::spawn(future);
 
     // Test with different types

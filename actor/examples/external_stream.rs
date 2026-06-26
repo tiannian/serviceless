@@ -53,9 +53,11 @@ impl Service for ExternalStreamService {
 async fn main() {
     let stream = once(ready(Envelope::new(StreamEvent(0x42))));
 
-    let ctx = Context::with_stream(stream);
+    let service = ExternalStreamService::default();
 
-    let (service_addr, future) = ctx.run(ExternalStreamService::default(), None);
+    let ctx = Context::with_stream(&service, stream, None);
+
+    let (service_addr, future) = ctx.run(service);
     let service_handle = tokio::spawn(future);
 
     sleep(Duration::from_millis(20)).await;

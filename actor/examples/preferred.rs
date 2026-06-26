@@ -60,7 +60,8 @@ impl Handler<Ping> for PreferredService {
 
 #[tokio::main]
 async fn main() {
-    let (addr, run) = Context::new().run(PreferredService, None);
+    let service = PreferredService;
+    let (addr, run) = Context::new(&service).run(service);
     let service_handle = tokio::spawn(run);
 
     let addr_for_slow = addr.clone();

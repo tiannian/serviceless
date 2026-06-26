@@ -57,9 +57,9 @@ impl Handler<U16> for Service0 {
 async fn main() {
     let srv = Service0::default();
 
-    let ctx = Context::new();
+    let ctx = Context::new(&srv);
 
-    let (service_addr, future) = ctx.run(srv, None);
+    let (service_addr, future) = ctx.run(srv);
     let service_handle = tokio::spawn(future);
 
     // Test ServiceAddress with multiple message types

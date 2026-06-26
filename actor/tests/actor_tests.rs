@@ -117,7 +117,8 @@ impl Handler<PublishNumber> for TestActor {
 
 #[tokio::test]
 async fn call_and_send_update_actor_state() {
-    let (addr, run) = Context::new().run(TestActor::default(), None);
+    let service = TestActor::default();
+    let (addr, run) = Context::new(&service).run(service);
     let runner = tokio::spawn(run);
 
     let v = addr.call(Add(2)).await.expect("call add should succeed");
@@ -133,7 +134,8 @@ async fn call_and_send_update_actor_state() {
 
 #[tokio::test]
 async fn preferred_handler_path_is_used_for_preferred_messages() {
-    let (addr, run) = Context::new().run(TestActor::default(), None);
+    let service = TestActor::default();
+    let (addr, run) = Context::new(&service).run(service);
     let runner = tokio::spawn(run);
 
     let v = addr
@@ -157,7 +159,8 @@ async fn preferred_handler_path_is_used_for_preferred_messages() {
 
 #[tokio::test]
 async fn subscribe_receives_published_topic_item() {
-    let (addr, run) = Context::new().run(TestActor::default(), None);
+    let service = TestActor::default();
+    let (addr, run) = Context::new(&service).run(service);
     let runner = tokio::spawn(run);
 
     let sub_addr = addr.clone();
@@ -185,7 +188,8 @@ async fn subscribe_receives_published_topic_item() {
 
 #[tokio::test]
 async fn subscribe_all_receives_every_publish_for_topic() {
-    let (addr, run) = Context::new().run(TestActor::default(), None);
+    let service = TestActor::default();
+    let (addr, run) = Context::new(&service).run(service);
     let runner = tokio::spawn(run);
 
     let mut handle = addr
@@ -214,7 +218,8 @@ async fn subscribe_all_receives_every_publish_for_topic() {
 
 #[tokio::test]
 async fn subscribe_all_only_receives_matching_topic_key() {
-    let (addr, run) = Context::new().run(TestActor::default(), None);
+    let service = TestActor::default();
+    let (addr, run) = Context::new(&service).run(service);
     let runner = tokio::spawn(run);
 
     let mut handle = addr
