@@ -82,6 +82,8 @@ where
     tasks: <S::Runtime as Runtime>::Spawner<Result<(), S::Error>>,
 
     metrics: Metrics,
+
+    stopped: bool,
 }
 
 impl<S> Default for Context<S>
@@ -118,6 +120,7 @@ where
             tasks: <S::Runtime as Runtime>::spawner(),
 
             metrics: Metrics::new(),
+            stopped: false,
         }
     }
 
@@ -145,6 +148,8 @@ where
     pub fn stop(&mut self) {
         let (receiver, _) = self.receiver.get_mut();
         receiver.close();
+
+        self.stopped = true;
     }
 
     /// Mutable reference to the extra envelope stream from [`Self::with_stream`].
@@ -216,6 +221,10 @@ where
 
                 let pending_tasks = this.tasks.len();
                 this.metrics.pending_tasks.set(pending_tasks as i64);
+
+                if this.stopped {
+                    break;
+                }
             }
 
             let pending_tasks = this.tasks.len();
