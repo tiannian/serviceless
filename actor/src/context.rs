@@ -44,7 +44,9 @@ impl Metrics {
     }
 
     pub fn register(&self, name: &str, registry: &mut Registry) {
-        let sub_registry = registry.sub_registry_with_prefix(name);
+        let sub_registry = registry
+            .sub_registry_with_prefix(name)
+            .sub_registry_with_prefix("serviceless");
 
         sub_registry.register(
             "pending_tasks",
