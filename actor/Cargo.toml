@@ -1,6 +1,6 @@
 [package]
 name = "serviceless"
-version = "0.5.10"
+version = "0.5.11"
 edition = "2021"
 description = "An simple actor model in rust, like actix"
 license = "MIT"
@@ -10,7 +10,7 @@ readme = "../README.md"
 
 [dependencies]
 async-trait = { workspace = true }
-log = { workspace = true }
+tracing = { workspace = true }
 thiserror = { workspace = true }
 futures-util = { workspace = true }
 futures-core = { workspace = true }

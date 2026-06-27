@@ -11,6 +11,7 @@ use prometheus_client::{
     registry::Registry,
 };
 use std::{future::Future, time::Instant};
+use tracing::debug;
 
 use crate::{
     runtime::{Runtime, Spawner, UnboundedReceiver, UnboundedSender},
@@ -202,6 +203,8 @@ where
 
         let mut service = service;
 
+        let service_name = String::from(service.metadata().name);
+
         let future = async move {
             service.started(&mut this).await?;
 
@@ -216,7 +219,13 @@ where
                         this.metrics.pending_messages.set(pending_messages as i64);
 
                         let start_time = Instant::now();
+
+                        debug!(target: "serviceless", "Received envelope from {}", service_name);
+
                         e.handle(&mut service, &mut this).await;
+
+                        debug!(target: "serviceless", "Handled envelope from {}", service_name);
+
                         let duration = start_time.elapsed();
                         this.metrics
                             .message_processing_time
