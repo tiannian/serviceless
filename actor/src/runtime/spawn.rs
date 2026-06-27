@@ -25,6 +25,13 @@ pub trait Spawner<T>: Send {
         T: Send;
 
     async fn join_next(&mut self) -> Option<Result<T, Self::Error>>;
+
+    /// Non-blocking poll: returns the next completed task's result if one is
+    /// already ready, otherwise returns `None` immediately without awaiting.
+    ///
+    /// Used by the actor run loop to batch-drain completed tasks before
+    /// awaiting new events, preventing a busy loop when many tasks pile up.
+    fn try_join_next(&mut self) -> Option<Result<T, Self::Error>>;
 }
 
 pub trait TaskHandle: Send + Sync + 'static {

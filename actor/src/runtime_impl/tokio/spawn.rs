@@ -54,6 +54,12 @@ where
             None
         }
     }
+
+    fn try_join_next(&mut self) -> Option<Result<T, Self::Error>> {
+        self.tasks
+            .try_join_next()
+            .map(|result| result.map_err(Error::JoinError))
+    }
 }
 
 pub struct TokioTaskHandle {

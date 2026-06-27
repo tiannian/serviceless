@@ -209,7 +209,10 @@ where
             service.started(&mut this).await?;
 
             loop {
+                while let Some(_res) = this.tasks.try_join_next() {}
+
                 tokio::select! {
+                    biased;
 
                     Some(e) = this.receiver.next() => {
                         let pending_tasks = this.tasks.len();
