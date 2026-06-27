@@ -29,7 +29,7 @@ impl Metrics {
     pub fn new() -> Self {
         let pending_tasks = Gauge::default();
         let message_processing_time = Histogram::new(exponential_buckets(
-            0.0001, // 100us
+            0.001, // 1ms
             2.0, 16,
         ));
         let pending_messages = Gauge::default();
