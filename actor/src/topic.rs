@@ -80,12 +80,14 @@ where
             let _ = tx.send(item.clone());
         }
 
-        let waiters = self.all_waiters.get(topic);
+        let waiters = self.all_waiters.get_mut(topic);
 
         if let Some(waiters) = waiters {
-            for tx in waiters {
+            for tx in waiters.iter() {
                 let _ = tx.send(item.clone());
             }
+
+            waiters.retain(|tx| !tx.is_closed());
         }
     }
 }
