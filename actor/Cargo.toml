@@ -15,7 +15,7 @@ thiserror = { workspace = true }
 futures-util = { workspace = true }
 futures-core = { workspace = true }
 
-tokio = { workspace = true, features = ["sync", "rt"] }
+tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 
 prometheus-client = { workspace = true }
 

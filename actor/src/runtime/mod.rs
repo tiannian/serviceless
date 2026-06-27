@@ -11,7 +11,7 @@ mod inner;
 pub use inner::*;
 
 pub trait Runtime: Send + 'static {
-    type Error;
+    type Error: Send;
 
     type UnboundedSender<T>: UnboundedSender<T, Error = Self::Error>
     where

@@ -203,27 +203,34 @@ where
         let future = async move {
             service.started(&mut this).await?;
 
-            while let Some(e) = this.receiver.next().await {
-                let pending_tasks = this.tasks.len();
-                this.metrics.pending_tasks.set(pending_tasks as i64);
+            loop {
+                tokio::select! {
 
-                let pending_messages = this.receiver().len();
-                this.metrics.pending_messages.set(pending_messages as i64);
+                    Some(e) = this.receiver.next() => {
+                        let pending_tasks = this.tasks.len();
+                        this.metrics.pending_tasks.set(pending_tasks as i64);
 
-                let start_time = Instant::now();
-                e.handle(&mut service, &mut this).await;
-                let duration = start_time.elapsed();
-                this.metrics
-                    .message_processing_time
-                    .observe(duration.as_secs_f64());
+                        let pending_messages = this.receiver().len();
+                        this.metrics.pending_messages.set(pending_messages as i64);
 
-                this.metrics.processed_messages.inc();
+                        let start_time = Instant::now();
+                        e.handle(&mut service, &mut this).await;
+                        let duration = start_time.elapsed();
+                        this.metrics
+                            .message_processing_time
+                            .observe(duration.as_secs_f64());
 
-                let pending_tasks = this.tasks.len();
-                this.metrics.pending_tasks.set(pending_tasks as i64);
+                        this.metrics.processed_messages.inc();
 
-                if this.stopped {
-                    break;
+                        let pending_tasks = this.tasks.len();
+                        this.metrics.pending_tasks.set(pending_tasks as i64);
+
+                        if this.stopped {
+                            break;
+                        }
+                    }
+
+                    Some(_res) = this.tasks.join_next(), if !this.tasks.is_empty() => {}
                 }
             }
 
