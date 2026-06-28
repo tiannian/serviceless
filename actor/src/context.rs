@@ -82,7 +82,7 @@ where
 {
     sender: <S::Runtime as Runtime>::UnboundedSender<Envelope<S>>,
     receiver: Select<<S::Runtime as Runtime>::UnboundedReceiver<Envelope<S>>, S::Stream>,
-    tasks: <S::Runtime as Runtime>::Spawner<Result<(), S::Error>>,
+    tasks: <S::Runtime as Runtime>::Spawner<()>,
 
     metrics: Metrics,
 
@@ -170,7 +170,7 @@ where
         stream
     }
 
-    pub fn spawner(&mut self) -> &mut impl Spawner<Result<(), S::Error>> {
+    pub fn spawner(&mut self) -> &mut impl Spawner<()> {
         &mut self.tasks
     }
 
@@ -190,13 +190,7 @@ where
     ///
     /// Returns the address and a future that should be spawned to run the service.
     /// The caller is responsible for spawning the returned future using their async runtime.
-    pub fn run(
-        self,
-        service: S,
-    ) -> (
-        ServiceAddress<S>,
-        impl Future<Output = Result<(), S::Error>> + Send,
-    ) {
+    pub fn run(self, service: S) -> (ServiceAddress<S>, impl Future<Output = ()> + Send) {
         let mut this = self;
 
         let address = this.addr();
@@ -206,7 +200,7 @@ where
         let service_name = String::from(service.metadata().name);
 
         let future = async move {
-            service.started(&mut this).await?;
+            service.started(&mut this).await;
 
             loop {
                 while let Some(_res) = this.tasks.try_join_next() {}
@@ -254,14 +248,12 @@ where
             let pending_tasks = this.tasks.len();
             this.metrics.pending_tasks.set(pending_tasks as i64);
 
-            service.stopped(&mut this).await?;
+            service.stopped(&mut this).await;
 
             let pending_tasks = this.tasks.len();
             this.metrics.pending_tasks.set(pending_tasks as i64);
 
             while this.tasks.join_next().await.is_some() {}
-
-            Ok(())
         };
 
         (address, future)

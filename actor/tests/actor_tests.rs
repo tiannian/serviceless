@@ -15,8 +15,6 @@ struct TestActor {
 impl Service for TestActor {
     type Stream = EmptyStream<Self>;
 
-    type Error = ();
-
     fn metadata(&self) -> Metadata<'_> {
         Metadata { name: "test_actor" }
     }
@@ -129,7 +127,7 @@ async fn call_and_send_update_actor_state() {
     assert_eq!(final_value, 5);
 
     addr.close_service();
-    runner.await.expect("service task should finish").unwrap();
+    runner.await.expect("service task should finish");
 }
 
 #[tokio::test]
@@ -154,7 +152,7 @@ async fn preferred_handler_path_is_used_for_preferred_messages() {
     assert!(used);
 
     addr.close_service();
-    runner.await.expect("service task should finish").unwrap();
+    runner.await.expect("service task should finish");
 }
 
 #[tokio::test]
@@ -183,7 +181,7 @@ async fn subscribe_receives_published_topic_item() {
     assert_eq!(published, 42);
 
     addr.close_service();
-    runner.await.expect("service task should finish").unwrap();
+    runner.await.expect("service task should finish");
 }
 
 #[tokio::test]
@@ -213,7 +211,7 @@ async fn subscribe_all_receives_every_publish_for_topic() {
     assert_eq!(handle.recv().await, Some(2));
 
     addr.close_service();
-    runner.await.expect("service task should finish").unwrap();
+    runner.await.expect("service task should finish");
 }
 
 #[tokio::test]
@@ -242,5 +240,5 @@ async fn subscribe_all_only_receives_matching_topic_key() {
     assert_eq!(handle.recv().await, Some(42));
 
     addr.close_service();
-    runner.await.expect("service task should finish").unwrap();
+    runner.await.expect("service task should finish");
 }
