@@ -11,8 +11,6 @@ struct PreferredService;
 impl Service for PreferredService {
     type Stream = EmptyStream<Self>;
 
-    type Error = ();
-
     fn metadata(&self) -> Metadata<'_> {
         Metadata {
             name: "preferred_service",
@@ -78,5 +76,5 @@ async fn main() {
     println!("slow preferred reply: {out}");
 
     addr.close_service();
-    service_handle.await.expect("service join failed").unwrap();
+    service_handle.await.expect("service join failed");
 }

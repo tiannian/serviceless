@@ -8,20 +8,16 @@ pub struct Service0 {}
 impl Service for Service0 {
     type Stream = EmptyStream<Self>;
 
-    type Error = ();
-
     fn metadata(&self) -> Metadata<'_> {
         Metadata { name: "service0" }
     }
 
-    async fn started(&mut self, _ctx: &mut Context<Self>) -> Result<(), Self::Error> {
+    async fn started(&mut self, _ctx: &mut Context<Self>) {
         println!("Started");
-        Ok(())
     }
 
-    async fn stopped(&mut self, _ctx: &mut Context<Self>) -> Result<(), Self::Error> {
+    async fn stopped(&mut self, _ctx: &mut Context<Self>) {
         println!("Stopped");
-        Ok(())
     }
 }
 
@@ -85,7 +81,7 @@ async fn main() {
 
     // Wait for the service future to complete, which will call stopped hook
     println!("Waiting for service to stop and call stopped hook...");
-    service_handle.await.expect("service join failed").unwrap();
+    service_handle.await.expect("service join failed");
     assert!(
         service_addr.is_stop(),
         "Service should be stopped after the service future completes"
