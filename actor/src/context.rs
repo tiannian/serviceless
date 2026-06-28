@@ -11,7 +11,7 @@ use prometheus_client::{
     registry::Registry,
 };
 use std::{future::Future, time::Instant};
-use tracing::debug;
+use tracing::{debug, trace};
 
 use crate::{
     runtime::{Runtime, Spawner, UnboundedReceiver, UnboundedSender},
@@ -211,6 +211,7 @@ where
             loop {
                 while let Some(_res) = this.tasks.try_join_next() {}
 
+                trace!(target: "serviceless", "looping once begin");
                 tokio::select! {
                     biased;
 
@@ -245,7 +246,9 @@ where
                     }
 
                     Some(_res) = this.tasks.join_next(), if !this.tasks.is_empty() => {}
+
                 }
+                trace!(target: "serviceless", "looping once begin");
             }
 
             let pending_tasks = this.tasks.len();
