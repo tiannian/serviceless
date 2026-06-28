@@ -248,7 +248,7 @@ where
                     Some(_res) = this.tasks.join_next(), if !this.tasks.is_empty() => {}
 
                 }
-                trace!(target: "serviceless", "looping once begin");
+                trace!(target: "serviceless", "looping once end");
             }
 
             let pending_tasks = this.tasks.len();
