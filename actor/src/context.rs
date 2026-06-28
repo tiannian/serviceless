@@ -46,8 +46,8 @@ impl Metrics {
 
     pub fn register(&self, name: &str, registry: &mut Registry) {
         let sub_registry = registry
-            .sub_registry_with_prefix(name)
-            .sub_registry_with_prefix("serviceless");
+            .sub_registry_with_prefix("serviceless")
+            .sub_registry_with_label(("service".into(), String::from(name).into()));
 
         sub_registry.register(
             "pending_tasks",
@@ -127,7 +127,7 @@ where
         let metadata = service.metadata();
 
         if let Some(registry) = registry {
-            ctx.metrics.register(&metadata.name, registry);
+            ctx.metrics.register(metadata.name, registry);
         }
 
         ctx
