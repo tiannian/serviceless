@@ -22,8 +22,6 @@ pub struct MyService {
 impl Service for MyService {
     type Stream = serviceless::EmptyStream<Self>;
 
-    type Error = ();
-
     fn metadata(&self) -> Metadata<'_> {
         Metadata { name: "my_service" }
     }

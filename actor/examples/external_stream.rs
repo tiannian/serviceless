@@ -30,22 +30,18 @@ impl Handler<StreamEvent> for ExternalStreamService {
 impl Service for ExternalStreamService {
     type Stream = Once<FuturesReady<Envelope<Self>>>;
 
-    type Error = ();
-
     fn metadata(&self) -> Metadata<'_> {
         Metadata {
             name: "external_stream_service",
         }
     }
 
-    async fn started(&mut self, _ctx: &mut Context<Self>) -> Result<(), Self::Error> {
+    async fn started(&mut self, _ctx: &mut Context<Self>) {
         println!("external stream service started");
-        Ok(())
     }
 
-    async fn stopped(&mut self, _ctx: &mut Context<Self>) -> Result<(), Self::Error> {
+    async fn stopped(&mut self, _ctx: &mut Context<Self>) {
         println!("external stream service stopped");
-        Ok(())
     }
 }
 
@@ -63,5 +59,5 @@ async fn main() {
     sleep(Duration::from_millis(20)).await;
 
     service_addr.close_service();
-    service_handle.await.expect("service join failed").unwrap();
+    service_handle.await.expect("service join failed");
 }

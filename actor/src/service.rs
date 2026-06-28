@@ -13,19 +13,13 @@ pub trait RuntimedService: Send + Sized + 'static {
     /// Extra envelope stream merged with the internal mailbox (see [`Context::with_stream`]).
     type Stream: Stream<Item = Envelope<Self>> + Unpin + Send;
 
-    type Error: Send;
-
     type Runtime: Runtime;
 
     fn metadata(&self) -> Metadata<'_>;
 
     /// Hook for service started
-    async fn started(&mut self, _ctx: &mut Context<Self>) -> Result<(), Self::Error> {
-        Ok(())
-    }
+    async fn started(&mut self, _ctx: &mut Context<Self>) {}
 
     /// Hook for service stopped
-    async fn stopped(&mut self, _ctx: &mut Context<Self>) -> Result<(), Self::Error> {
-        Ok(())
-    }
+    async fn stopped(&mut self, _ctx: &mut Context<Self>) {}
 }
