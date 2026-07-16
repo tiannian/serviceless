@@ -170,7 +170,7 @@ where
         stream
     }
 
-    pub fn spawner(&mut self) -> &mut impl Spawner<()> {
+    pub fn spawner(&mut self) -> &mut <S::Runtime as Runtime>::Spawner<()> {
         &mut self.tasks
     }
 
