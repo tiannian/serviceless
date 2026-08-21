@@ -3,16 +3,13 @@ pub use metadata::*;
 
 pub mod runtime;
 
-mod service;
-pub use service::*;
+mod traits;
+pub use traits::*;
 
 mod context;
 pub use context::*;
 
 mod metrics;
-
-mod handler;
-pub use handler::*;
 
 mod topic;
 pub use topic::*;

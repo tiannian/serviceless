@@ -2,30 +2,8 @@ use std::collections::BTreeMap;
 
 use crate::{
     runtime::{OneshotSender, Runtime, UnboundedSender},
-    RuntimedService,
+    Topic,
 };
-
-/// A typed pub/sub topic.
-pub trait Topic: Ord + Clone + Send + 'static {
-    type Item: Clone + Send + 'static;
-}
-
-/// Bind a topic to a concrete endpoint field on a service.
-///
-/// This is the key piece that replaces Any/TypeId routing:
-/// each topic knows where its endpoint lives on service S.
-pub trait RoutedTopic<S>: Topic
-where
-    S: RuntimedService,
-{
-    /// Returns this topic's [`TopicEndpoint`] on `service`.
-    ///
-    /// Implementations should consistently point at the same logical field on `S` so
-    /// routing matches how the service stores topic state.
-    fn endpoint(service: &mut S) -> &mut RuntimedTopicEndpoint<Self, S::Runtime>
-    where
-        Self: Sized;
-}
 
 /// A single-shot broadcast endpoint.
 ///
