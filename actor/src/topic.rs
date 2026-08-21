@@ -38,7 +38,7 @@ where
     R: Runtime,
 {
     once_waiters: BTreeMap<T, Vec<R::OneshotSender<T::Item>>>,
-    all_waiters: BTreeMap<T, Vec<R::UnboundedSender<T::Item>>>,
+    all_waiters: BTreeMap<T, Vec<R::AsyncUnboundedSender<T::Item>>>,
 }
 
 impl<T, R> Default for RuntimedTopicEndpoint<T, R>
@@ -66,7 +66,7 @@ where
     }
 
     /// Register a subscriber waiting for all future publications.
-    pub fn subscribe_all(&mut self, topic: T, tx: R::UnboundedSender<T::Item>) {
+    pub fn subscribe_all(&mut self, topic: T, tx: R::AsyncUnboundedSender<T::Item>) {
         self.all_waiters.entry(topic).or_default().push(tx);
     }
 

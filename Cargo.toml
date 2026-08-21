@@ -12,3 +12,4 @@ futures-sink = "0.3"
 futures-util = "0.3"
 tokio = { version = "1.37.0", default-features = false }
 prometheus-client = "0.25.0"
+crossbeam-channel = "0.5"

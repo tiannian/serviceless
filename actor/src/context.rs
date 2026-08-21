@@ -8,7 +8,7 @@ use tracing::{debug, trace};
 
 use crate::{
     metrics::Metrics,
-    runtime::{Runtime, Spawner, UnboundedReceiver, UnboundedSender},
+    runtime::{Runtime, Spawner, UnboundedReceiverBase, UnboundedSender},
     Envelope, Error, RoutedTopic, RuntimedService, ServiceAddress, Topic,
 };
 
@@ -17,8 +17,8 @@ pub struct Context<S>
 where
     S: RuntimedService,
 {
-    sender: <S::Runtime as Runtime>::UnboundedSender<Envelope<S>>,
-    receiver: Select<<S::Runtime as Runtime>::UnboundedReceiver<Envelope<S>>, S::Stream>,
+    sender: <S::Runtime as Runtime>::AsyncUnboundedSender<Envelope<S>>,
+    receiver: Select<<S::Runtime as Runtime>::AsyncUnboundedReceiver<Envelope<S>>, S::Stream>,
     tasks: <S::Runtime as Runtime>::Spawner<()>,
 
     metrics: Metrics,
@@ -50,7 +50,7 @@ where
 {
     /// Create a context with an additional stream of envelopes.
     pub fn with_stream(service: &S, stream: S::Stream, registry: Option<&mut Registry>) -> Self {
-        let (sender, receiver) = <S::Runtime as Runtime>::unbounded();
+        let (sender, receiver) = <S::Runtime as Runtime>::async_unbounded();
 
         let ctx: Context<S> = Self {
             sender,
@@ -113,7 +113,7 @@ where
 
     pub(crate) fn receiver(
         &mut self,
-    ) -> &mut <S::Runtime as Runtime>::UnboundedReceiver<Envelope<S>> {
+    ) -> &mut <S::Runtime as Runtime>::AsyncUnboundedReceiver<Envelope<S>> {
         let (receiver, _) = self.receiver.get_mut();
         receiver
     }
@@ -201,7 +201,7 @@ pub struct PublishHandle<S>
 where
     S: RuntimedService,
 {
-    pub(crate) sender: <S::Runtime as Runtime>::UnboundedSender<Envelope<S>>,
+    pub(crate) sender: <S::Runtime as Runtime>::AsyncUnboundedSender<Envelope<S>>,
 }
 
 impl<S> PublishHandle<S>

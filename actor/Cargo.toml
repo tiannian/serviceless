@@ -19,6 +19,8 @@ tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 
 prometheus-client = { workspace = true }
 
+crossbeam-channel = { workspace = true }
+
 [dev-dependencies]
 tokio = { workspace = true, features = [
     "rt",

@@ -11,11 +11,8 @@ pub trait UnboundedSender<T>: InnerOp + Clone + Send + Sync {
     fn is_closed(&self) -> bool;
 }
 
-#[async_trait]
-pub trait UnboundedReceiver<T>: InnerOp + Stream<Item = T> + Unpin + Send + Sync {
+pub trait UnboundedReceiverBase {
     type Error;
-
-    async fn recv(&mut self) -> Result<T, Self::Error>;
 
     fn close(&mut self);
 
@@ -24,4 +21,17 @@ pub trait UnboundedReceiver<T>: InnerOp + Stream<Item = T> + Unpin + Send + Sync
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
+}
+
+#[async_trait]
+pub trait AsyncUnboundedReceiver<T>:
+    InnerOp + Stream<Item = T> + UnboundedReceiverBase + Unpin + Send + Sync
+{
+    async fn recv(&mut self) -> Result<T, Self::Error>;
+}
+
+pub trait SyncUnboundedReceiver<T>:
+    InnerOp + Stream<Item = T> + UnboundedReceiverBase + Unpin + Send + Sync
+{
+    fn recv(&self) -> Result<T, Self::Error>;
 }

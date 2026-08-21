@@ -73,7 +73,7 @@ impl<S> Envelope<S> {
     /// Register a subscriber waiting for all future publications.
     pub fn new_subscribe_all_topic<T>(
         topic: T,
-        result_channel: <S::Runtime as Runtime>::UnboundedSender<T::Item>,
+        result_channel: <S::Runtime as Runtime>::AsyncUnboundedSender<T::Item>,
     ) -> Self
     where
         S: RuntimedService + Send,
@@ -235,7 +235,7 @@ where
     R: Runtime,
 {
     topic: T,
-    result_channel: R::UnboundedSender<T::Item>,
+    result_channel: R::AsyncUnboundedSender<T::Item>,
 }
 
 impl<T, R> SubscribeAllTopicEnvelope<T, R>
@@ -243,7 +243,7 @@ where
     T: Topic,
     R: Runtime,
 {
-    pub(crate) fn new(topic: T, result_channel: R::UnboundedSender<T::Item>) -> Self {
+    pub(crate) fn new(topic: T, result_channel: R::AsyncUnboundedSender<T::Item>) -> Self {
         Self {
             topic,
             result_channel,

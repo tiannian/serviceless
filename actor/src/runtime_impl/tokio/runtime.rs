@@ -17,12 +17,12 @@ impl Runtime for TokioRuntime {
         = TokioUnboundedSender<T>
     where
         T: Send;
-    type UnboundedReceiver<T>
+    type AsyncUnboundedReceiver<T>
         = TokioUnboundedReceiver<T>
     where
         T: Send;
 
-    fn unbounded<T>() -> (Self::UnboundedSender<T>, Self::UnboundedReceiver<T>)
+    fn async_unbounded<T>() -> (Self::UnboundedSender<T>, Self::AsyncUnboundedReceiver<T>)
     where
         T: Send,
     {

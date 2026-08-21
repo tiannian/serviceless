@@ -7,7 +7,7 @@ use futures_core::Stream;
 use futures_util::StreamExt;
 
 use crate::{
-    runtime::{Runtime, UnboundedReceiver},
+    runtime::{AsyncUnboundedReceiver, Runtime, UnboundedReceiverBase},
     Topic,
 };
 
@@ -15,7 +15,7 @@ pub struct RuntimedTopicAllHandle<T: Topic, R>
 where
     R: Runtime,
 {
-    receiver: R::UnboundedReceiver<T::Item>,
+    receiver: R::AsyncUnboundedReceiver<T::Item>,
 }
 
 impl<T, R> RuntimedTopicAllHandle<T, R>
@@ -23,7 +23,7 @@ where
     T: Topic,
     R: Runtime,
 {
-    pub(crate) fn new(receiver: R::UnboundedReceiver<T::Item>) -> Self {
+    pub(crate) fn new(receiver: R::AsyncUnboundedReceiver<T::Item>) -> Self {
         Self { receiver }
     }
 

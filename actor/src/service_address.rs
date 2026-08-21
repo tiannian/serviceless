@@ -14,7 +14,7 @@ pub struct ServiceAddress<S>
 where
     S: RuntimedService,
 {
-    pub(crate) sender: <S::Runtime as Runtime>::UnboundedSender<Envelope<S>>,
+    pub(crate) sender: <S::Runtime as Runtime>::AsyncUnboundedSender<Envelope<S>>,
 }
 
 impl<S> Clone for ServiceAddress<S>
@@ -116,7 +116,7 @@ where
     where
         T: Topic + RoutedTopic<S>,
     {
-        let (sender, receiver) = <S::Runtime as Runtime>::unbounded::<T::Item>();
+        let (sender, receiver) = <S::Runtime as Runtime>::async_unbounded::<T::Item>();
         let env = Envelope::<S>::new_subscribe_all_topic::<T>(topic, sender);
         self.sender.send(env).map_err(|_| Error::ServiceStoped)?;
         Ok(RuntimedTopicAllHandle::new(receiver))

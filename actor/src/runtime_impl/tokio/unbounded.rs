@@ -3,7 +3,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use crate::runtime::{InnerOp, UnboundedReceiver, UnboundedSender};
+use crate::runtime::{AsyncUnboundedReceiver, InnerOp, UnboundedReceiverBase, UnboundedSender};
 use async_trait::async_trait;
 use futures_core::Stream;
 use tokio::sync::mpsc;
@@ -88,19 +88,11 @@ where
     }
 }
 
-#[async_trait]
-impl<T> UnboundedReceiver<T> for TokioUnboundedReceiver<T>
+impl<T> UnboundedReceiverBase for TokioUnboundedReceiver<T>
 where
     T: Send,
 {
     type Error = Error;
-
-    async fn recv(&mut self) -> Result<T, Self::Error> {
-        self.receiver
-            .recv()
-            .await
-            .ok_or(Error::UnboundedChannelClosed)
-    }
 
     fn close(&mut self) {
         self.receiver.close();
@@ -108,5 +100,18 @@ where
 
     fn len(&self) -> usize {
         self.receiver.len()
+    }
+}
+
+#[async_trait]
+impl<T> AsyncUnboundedReceiver<T> for TokioUnboundedReceiver<T>
+where
+    T: Send,
+{
+    async fn recv(&mut self) -> Result<T, Self::Error> {
+        self.receiver
+            .recv()
+            .await
+            .ok_or(Error::UnboundedChannelClosed)
     }
 }

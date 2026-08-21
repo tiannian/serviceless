@@ -13,14 +13,29 @@ pub use inner::*;
 pub trait Runtime: Send + 'static {
     type Error: Send;
 
-    type UnboundedSender<T>: UnboundedSender<T, Error = Self::Error>
+    type AsyncUnboundedSender<T>: UnboundedSender<T, Error = Self::Error>
     where
         T: Send;
-    type UnboundedReceiver<T>: UnboundedReceiver<T, Error = Self::Error>
+    type AsyncUnboundedReceiver<T>: AsyncUnboundedReceiver<T, Error = Self::Error>
     where
         T: Send;
 
-    fn unbounded<T>() -> (Self::UnboundedSender<T>, Self::UnboundedReceiver<T>)
+    type SyncUnboundedSender<T>: UnboundedSender<T, Error = Self::Error>
+    where
+        T: Send;
+
+    type SyncUnboundedReceiver<T>: SyncUnboundedReceiver<T, Error = Self::Error>
+    where
+        T: Send;
+
+    fn async_unbounded<T>() -> (
+        Self::AsyncUnboundedSender<T>,
+        Self::AsyncUnboundedReceiver<T>,
+    )
+    where
+        T: Send;
+
+    fn sync_unbounded<T>() -> (Self::SyncUnboundedSender<T>, Self::SyncUnboundedReceiver<T>)
     where
         T: Send;
 
