@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    runtime::{OneshotSender, Runtime, UnboundedSender},
+    runtime::{OneshotSender, UnboundedSender},
     Topic,
 };
 
@@ -10,19 +10,21 @@ use crate::{
 /// - each subscribe registers one waiter
 /// - each publish wakes all current waiters once
 /// - future publishes require future subscribe calls again
-pub struct RuntimedTopicEndpoint<T, R>
+pub struct RuntimedTopicEndpoint<T, O, R>
 where
     T: Topic,
-    R: Runtime,
+    O: OneshotSender<T::Item>,
+    R: UnboundedSender<T::Item>,
 {
-    once_waiters: BTreeMap<T, Vec<R::OneshotSender<T::Item>>>,
-    all_waiters: BTreeMap<T, Vec<R::AsyncUnboundedSender<T::Item>>>,
+    once_waiters: BTreeMap<T, Vec<O>>,
+    all_waiters: BTreeMap<T, Vec<R>>,
 }
 
-impl<T, R> Default for RuntimedTopicEndpoint<T, R>
+impl<T, O, R> Default for RuntimedTopicEndpoint<T, O, R>
 where
     T: Topic,
-    R: Runtime,
+    O: OneshotSender<T::Item>,
+    R: UnboundedSender<T::Item>,
 {
     /// Empty endpoint with no waiters.
     fn default() -> Self {
@@ -33,18 +35,19 @@ where
     }
 }
 
-impl<T, R> RuntimedTopicEndpoint<T, R>
+impl<T, O, R> RuntimedTopicEndpoint<T, O, R>
 where
     T: Topic,
-    R: Runtime,
+    O: OneshotSender<T::Item>,
+    R: UnboundedSender<T::Item>,
 {
     /// Register one subscriber waiting for the next publication.
-    pub fn subscribe(&mut self, topic: T, tx: R::OneshotSender<T::Item>) {
+    pub fn subscribe(&mut self, topic: T, tx: O) {
         self.once_waiters.entry(topic).or_default().push(tx);
     }
 
     /// Register a subscriber waiting for all future publications.
-    pub fn subscribe_all(&mut self, topic: T, tx: R::AsyncUnboundedSender<T::Item>) {
+    pub fn subscribe_all(&mut self, topic: T, tx: R) {
         self.all_waiters.entry(topic).or_default().push(tx);
     }
 

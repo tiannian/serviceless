@@ -1,25 +1,28 @@
-use crate::{
-    runtime::{OneshotSender, Runtime},
-    Error, Message,
-};
+use std::marker::PhantomData;
 
-pub struct RuntimedReplyHandle<M, R>
+use crate::{runtime::OneshotSender, Error, Message};
+
+pub struct RuntimedReplyHandle<M, O>
 where
     M: Message + Send + 'static,
     M::Result: Send,
-    R: Runtime,
+    O: OneshotSender<M::Result>,
 {
-    sender: Option<R::OneshotSender<M::Result>>,
+    sender: Option<O>,
+    marker: PhantomData<M>,
 }
 
-impl<M, R> RuntimedReplyHandle<M, R>
+impl<M, O> RuntimedReplyHandle<M, O>
 where
     M: Message + Send + 'static,
     M::Result: Send,
-    R: Runtime,
+    O: OneshotSender<M::Result>,
 {
-    pub(crate) fn new(sender: Option<R::OneshotSender<M::Result>>) -> Self {
-        Self { sender }
+    pub(crate) fn new(sender: Option<O>) -> Self {
+        Self {
+            sender,
+            marker: PhantomData,
+        }
     }
 
     pub fn send(self, value: M::Result) -> std::result::Result<(), Error> {

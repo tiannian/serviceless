@@ -112,7 +112,10 @@ where
         Ok(receiver.recv().map_err(|_| Error::ServiceStoped))
     }
 
-    pub fn subscribe_all<T>(&self, topic: T) -> Result<RuntimedTopicAllHandle<T, S::Runtime>>
+    pub fn subscribe_all<T>(
+        &self,
+        topic: T,
+    ) -> Result<RuntimedTopicAllHandle<T, <S::Runtime as Runtime>::AsyncUnboundedReceiver<T::Item>>>
     where
         T: Topic + RoutedTopic<S>,
     {

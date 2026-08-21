@@ -1,4 +1,5 @@
 use std::{
+    marker::PhantomData,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -6,25 +7,26 @@ use std::{
 use futures_core::Stream;
 use futures_util::StreamExt;
 
-use crate::{
-    runtime::{AsyncUnboundedReceiver, Runtime, UnboundedReceiverBase},
-    Topic,
-};
+use crate::{runtime::AsyncUnboundedReceiver, Topic};
 
 pub struct RuntimedTopicAllHandle<T: Topic, R>
 where
-    R: Runtime,
+    R: AsyncUnboundedReceiver<T::Item>,
 {
-    receiver: R::AsyncUnboundedReceiver<T::Item>,
+    receiver: R,
+    marker: PhantomData<T>,
 }
 
 impl<T, R> RuntimedTopicAllHandle<T, R>
 where
     T: Topic,
-    R: Runtime,
+    R: AsyncUnboundedReceiver<T::Item>,
 {
-    pub(crate) fn new(receiver: R::AsyncUnboundedReceiver<T::Item>) -> Self {
-        Self { receiver }
+    pub(crate) fn new(receiver: R) -> Self {
+        Self {
+            receiver,
+            marker: PhantomData,
+        }
     }
 
     pub async fn recv(&mut self) -> Option<T::Item> {
@@ -39,7 +41,7 @@ where
 impl<T, R> Stream for RuntimedTopicAllHandle<T, R>
 where
     T: Topic,
-    R: Runtime,
+    R: AsyncUnboundedReceiver<T::Item>,
 {
     type Item = T::Item;
 

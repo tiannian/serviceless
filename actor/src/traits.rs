@@ -41,7 +41,7 @@ where
         &mut self,
         message: M,
         ctx: &mut Context<Self>,
-        handle: RuntimedReplyHandle<M, Self::Runtime>,
+        handle: RuntimedReplyHandle<M, <Self::Runtime as Runtime>::OneshotSender<M::Result>>,
     ) where
         M: Send + 'static,
         M::Result: Send,
@@ -58,8 +58,8 @@ pub trait Message {
 }
 
 /// A typed pub/sub topic.
-pub trait Topic: Ord + Clone + Send + 'static {
-    type Item: Clone + Send + 'static;
+pub trait Topic: Ord + Clone + Send + Unpin + 'static {
+    type Item: Clone + Send + Unpin + 'static;
 }
 
 /// Binds a topic to a concrete endpoint field on a service.
@@ -74,7 +74,13 @@ where
     ///
     /// Implementations should consistently point at the same logical field on `S` so
     /// routing matches how the service stores topic state.
-    fn endpoint(service: &mut S) -> &mut RuntimedTopicEndpoint<Self, S::Runtime>
+    fn endpoint(
+        service: &mut S,
+    ) -> &mut RuntimedTopicEndpoint<
+        Self,
+        <S::Runtime as Runtime>::OneshotSender<Self::Item>,
+        <S::Runtime as Runtime>::AsyncUnboundedSender<Self::Item>,
+    >
     where
         Self: Sized;
 }
