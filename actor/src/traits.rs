@@ -24,6 +24,10 @@ pub trait RuntimedService: Send + Sized + 'static {
 
     /// Hook for service stopped.
     async fn stopped(&mut self, _ctx: &mut Context<Self>) {}
+
+    fn sync_started(&mut self, _ctx: &mut Context<Self>) {}
+
+    fn sync_stopped(&mut self, _ctx: &mut Context<Self>) {}
 }
 
 /// Handles a message on a service.
@@ -47,6 +51,27 @@ where
         M::Result: Send,
     {
         let res = self.handle(message, ctx).await;
+        let _ = handle.send(res);
+    }
+}
+
+pub trait SyncHandler<M>
+where
+    Self: RuntimedService + Sized,
+    M: Message,
+{
+    fn sync_handle(&mut self, message: M, ctx: &mut Context<Self>) -> M::Result;
+
+    fn sync_handle_preferred(
+        &mut self,
+        message: M,
+        ctx: &mut Context<Self>,
+        handle: RuntimedReplyHandle<M, <Self::Runtime as Runtime>::OneshotSender<M::Result>>,
+    ) where
+        M: Send + 'static,
+        M::Result: Send,
+    {
+        let res = self.sync_handle(message, ctx);
         let _ = handle.send(res);
     }
 }
