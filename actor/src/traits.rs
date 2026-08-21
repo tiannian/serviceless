@@ -32,9 +32,8 @@ pub trait RuntimedService: Send + Sized + 'static {
 
 /// Handles a message on a service.
 #[async_trait]
-pub trait Handler<M>
+pub trait Handler<M>: RuntimedService + Sized
 where
-    Self: RuntimedService + Sized,
     M: Message,
 {
     /// Handle a message.
@@ -55,9 +54,8 @@ where
     }
 }
 
-pub trait SyncHandler<M>
+pub trait SyncHandler<M>: RuntimedService + Sized
 where
-    Self: RuntimedService + Sized,
     M: Message,
 {
     fn sync_handle(&mut self, message: M, ctx: &mut Context<Self>) -> M::Result;
