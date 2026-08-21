@@ -9,6 +9,8 @@ pub use service::*;
 mod context;
 pub use context::*;
 
+mod metrics;
+
 mod handler;
 pub use handler::*;
 
