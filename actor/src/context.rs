@@ -74,10 +74,10 @@ where
     ///
     /// Even if service not start, you can also get an address.
     /// But if you send message, the message maybe lost.
-    pub fn addr(&self) -> ServiceAddress<S> {
-        ServiceAddress {
-            sender: self.sender.clone(),
-        }
+    pub fn addr(
+        &self,
+    ) -> ServiceAddress<S, <S::Runtime as Runtime>::AsyncUnboundedSender<Envelope<S>>> {
+        ServiceAddress::new(self.sender.clone())
     }
 
     /// Get a publish handle
@@ -127,7 +127,13 @@ where
     ///
     /// Returns the address and a future that should be spawned to run the service.
     /// The caller is responsible for spawning the returned future using their async runtime.
-    pub fn run(self, service: S) -> (ServiceAddress<S>, impl Future<Output = ()> + Send) {
+    pub fn run(
+        self,
+        service: S,
+    ) -> (
+        ServiceAddress<S, <S::Runtime as Runtime>::AsyncUnboundedSender<Envelope<S>>>,
+        impl Future<Output = ()> + Send,
+    ) {
         let mut this = self;
 
         let address = this.addr();

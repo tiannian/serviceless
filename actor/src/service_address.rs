@@ -1,5 +1,5 @@
 use futures_util::TryFutureExt;
-use std::future::Future;
+use std::{future::Future, marker::PhantomData};
 
 use crate::{
     envelop::Envelope,
@@ -10,28 +10,40 @@ use crate::{
 /// Address of Service
 ///
 /// This address can clone.
-pub struct ServiceAddress<S>
+pub struct ServiceAddress<Service, Sender>
 where
-    S: RuntimedService,
+    Service: RuntimedService,
+    Sender: UnboundedSender<Envelope<Service>>,
 {
-    pub(crate) sender: <S::Runtime as Runtime>::AsyncUnboundedSender<Envelope<S>>,
+    pub(crate) sender: Sender,
+    marker: PhantomData<Service>,
 }
 
-impl<S> Clone for ServiceAddress<S>
+impl<Service, Sender> Clone for ServiceAddress<Service, Sender>
 where
-    S: RuntimedService,
+    Service: RuntimedService,
+    Sender: UnboundedSender<Envelope<Service>>,
 {
     fn clone(&self) -> Self {
         Self {
             sender: self.sender.clone(),
+            marker: PhantomData,
         }
     }
 }
 
-impl<S> ServiceAddress<S>
+impl<Service, Sender> ServiceAddress<Service, Sender>
 where
-    S: RuntimedService,
+    Service: RuntimedService,
+    Sender: UnboundedSender<Envelope<Service>>,
 {
+    pub fn new(sender: Sender) -> Self {
+        Self {
+            sender,
+            marker: PhantomData,
+        }
+    }
+
     /// Return true when service stopped.
     pub fn is_stop(&self) -> bool {
         self.sender.is_closed()
@@ -43,18 +55,19 @@ where
     }
 }
 
-impl<S> ServiceAddress<S>
+impl<Service, Sender> ServiceAddress<Service, Sender>
 where
-    S: RuntimedService,
+    Service: RuntimedService,
+    Sender: UnboundedSender<Envelope<Service>>,
 {
     /// Call service's handler and get result
     pub async fn call<M>(&self, message: M) -> Result<M::Result>
     where
         M: Message + Send + 'static,
         M::Result: Send,
-        S: Handler<M>,
+        Service: Handler<M>,
     {
-        let (sender, receiver) = <S::Runtime as Runtime>::oneshot::<M::Result>();
+        let (sender, receiver) = <Service::Runtime as Runtime>::oneshot::<M::Result>();
 
         let env = Envelope::new_with_result_channel(message, Some(sender));
 
@@ -66,13 +79,13 @@ where
     pub fn call_raw<M>(
         &self,
         message: M,
-    ) -> Result<<S::Runtime as Runtime>::OneshotReceiver<M::Result>>
+    ) -> Result<<Service::Runtime as Runtime>::OneshotReceiver<M::Result>>
     where
         M: Message + Send + 'static,
         M::Result: Send,
-        S: Handler<M>,
+        Service: Handler<M>,
     {
-        let (sender, receiver) = <S::Runtime as Runtime>::oneshot::<M::Result>();
+        let (sender, receiver) = <Service::Runtime as Runtime>::oneshot::<M::Result>();
 
         let env = Envelope::new_with_result_channel(message, Some(sender));
 
@@ -88,7 +101,7 @@ where
     where
         M: Message + Send + 'static,
         M::Result: Send,
-        S: Handler<M>,
+        Service: Handler<M>,
     {
         let env = Envelope::new(message);
 
@@ -102,10 +115,10 @@ where
     /// One call waits for one future publication.
     pub fn subscribe<T>(&self, topic: T) -> Result<impl Future<Output = Result<T::Item>> + Send>
     where
-        T: Topic + RoutedTopic<S>,
+        T: Topic + RoutedTopic<Service>,
     {
-        let (sender, receiver) = <S::Runtime as Runtime>::oneshot::<T::Item>();
-        let env = Envelope::<S>::new_subscribe_topic::<T>(topic, sender);
+        let (sender, receiver) = <Service::Runtime as Runtime>::oneshot::<T::Item>();
+        let env = Envelope::<Service>::new_subscribe_topic::<T>(topic, sender);
 
         self.sender.send(env).map_err(|_| Error::ServiceStoped)?;
 
@@ -115,12 +128,14 @@ where
     pub fn subscribe_all<T>(
         &self,
         topic: T,
-    ) -> Result<RuntimedTopicAllHandle<T, <S::Runtime as Runtime>::AsyncUnboundedReceiver<T::Item>>>
+    ) -> Result<
+        RuntimedTopicAllHandle<T, <Service::Runtime as Runtime>::AsyncUnboundedReceiver<T::Item>>,
+    >
     where
-        T: Topic + RoutedTopic<S>,
+        T: Topic + RoutedTopic<Service>,
     {
-        let (sender, receiver) = <S::Runtime as Runtime>::async_unbounded::<T::Item>();
-        let env = Envelope::<S>::new_subscribe_all_topic::<T>(topic, sender);
+        let (sender, receiver) = <Service::Runtime as Runtime>::async_unbounded::<T::Item>();
+        let env = Envelope::<Service>::new_subscribe_all_topic::<T>(topic, sender);
         self.sender.send(env).map_err(|_| Error::ServiceStoped)?;
         Ok(RuntimedTopicAllHandle::new(receiver))
     }
