@@ -1,6 +1,6 @@
 [package]
 name = "serviceless-actor"
-version = "0.6.1"
+version.workspace = true
 edition = "2021"
 description = "An simple actor model in rust, like actix"
 license = "MIT"

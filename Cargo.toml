@@ -2,9 +2,13 @@
 members = ["actor", "tokio", "serviceless", "macros"]
 resolver = "2"
 
+[workspace.package]
+version = "0.7.0"
+
 [workspace.dependencies]
-serviceless-actor = { path = "actor", version = "0.6.1" }
-serviceless-tokio = { path = "tokio", version = "0.6.1" }
+serviceless-actor = { path = "actor", version = "0.7.0" }
+serviceless-tokio = { path = "tokio", version = "0.7.0" }
+serviceless-macros = { path = "macros", version = "0.7.0" }
 async-trait = "0.1.80"
 tracing = "0.1.44"
 thiserror = "2.0.17"

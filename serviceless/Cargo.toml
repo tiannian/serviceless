@@ -1,6 +1,6 @@
 [package]
 name = "serviceless"
-version = "0.6.1"
+version.workspace = true
 edition = "2021"
 description = "Async actor library with a Tokio runtime"
 license = "MIT"
@@ -9,7 +9,7 @@ readme = "../README.md"
 [dependencies]
 serviceless-actor = { workspace = true }
 serviceless-tokio = { workspace = true }
-serviceless-macros = { path = "../macros", version = "0.6.1" }
+serviceless-macros = { workspace = true }
 async-trait = { workspace = true }
 
 [dev-dependencies]
