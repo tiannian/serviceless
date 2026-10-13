@@ -132,6 +132,27 @@ whose key deserializes from `null`. Closing the SSE response drops its subscript
 one-way, so ordinary calls still use HTTP POST. Events are live only; reconnecting starts a new
 subscription without replay.
 
+Run the [topic notification example](jsonrpc/server/examples/topic_notifications.rs) to see one
+producer publish alternating events under the `alice` and `bob` keys:
+
+```bash
+cargo run -p serviceless-jsonrpc-server --example topic_notifications
+```
+
+In separate terminals, open either or both SSE subscriptions:
+
+```bash
+curl -N 'http://127.0.0.1:3000/events?method=user.updated&params=%7B%22user%22%3A%22alice%22%7D'
+curl -N 'http://127.0.0.1:3000/events?method=user.updated&params=%7B%22user%22%3A%22bob%22%7D'
+```
+
+The same server accepts WebSocket connections at `ws://127.0.0.1:3000/`. Send
+`{"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"user.updated","params":{"user":"alice"}},"id":1}`
+to subscribe there. The result contains the subscription ID; subsequent `user.updated`
+notifications contain that ID and a `value` with `sequence` and `message`. This example
+demonstrates exact-key routing: an `alice` subscriber receives only publications to the
+`alice` topic key.
+
 On Unix, `serve_unix` serves HTTP and WebSocket over a Unix socket, while `serve_unix_lines`
 serves newline-delimited JSON-RPC directly on the socket. `serve_stdio` uses the same one-JSON-
 document-per-line framing on stdin and stdout. These functions run until the listener or input
