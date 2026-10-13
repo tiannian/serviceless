@@ -1,5 +1,5 @@
 //! Run with `cargo run -p serviceless-jsonrpc-server --example topic_notifications`.
-//! Then open the SSE URLs in the README to see per-user notifications.
+//! Then use the SSE POST requests in the README to see per-user notifications.
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

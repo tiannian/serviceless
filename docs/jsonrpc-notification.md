@@ -2,7 +2,7 @@
 
 [中文版](jsonrpc-notification.zh.md)
 
-This guide describes the implementation in this repository. JSON-RPC 2.0 defines a **notification** as a request without an `id`: its receiver sends no response. The `rpc.subscribe` and `rpc.unsubscribe` methods described here are this project's subscription convention. They are not methods defined by JSON-RPC 2.0 itself.
+This guide describes the implementation in this repository. JSON-RPC 2.0 defines a **notification** as a request without an `id`: its receiver sends no response. The `rpc.subscribe` method described here is this project's subscription convention. It is not defined by JSON-RPC 2.0 itself.
 
 ## What the current implementation does
 
@@ -93,53 +93,47 @@ Connect to `ws://127.0.0.1:3000/` and send a JSON-RPC request containing an `id`
 {"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"user.updated","params":{"user":"alice"}},"id":1}
 ```
 
-The outer `params.method` is the name registered with `router.topic`. The inner `params.params` is deserialized into the `UserTopic` key. A successful response returns a numeric subscription ID **local to this connection**:
+The outer `params.method` is the name registered with `router.topic`. The inner `params.params` is deserialized into the `UserTopic` key. A successful response returns `true`:
 
 ```json
-{"jsonrpc":"2.0","result":1,"id":1}
+{"jsonrpc":"2.0","result":true,"id":1}
 ```
 
 Each matching publication produces a notification, without an `id`:
 
 ```json
-{"jsonrpc":"2.0","method":"user.updated","params":{"subscription":1,"value":{"sequence":3,"message":"update for alice"}}}
+{"jsonrpc":"2.0","method":"user.updated","params":{"sequence":3,"message":"update for alice"}}
 ```
 
-The `subscription` field identifies which subscription received the event; `value` is the serialized topic item. Multiple subscriptions can share one WebSocket connection. The request `id` and the returned subscription ID are different things.
+`params` is the serialized topic item. Each WebSocket connection accepts one subscription; a second subscribe call returns an error.
 
-To cancel, send:
-
-```json
-{"jsonrpc":"2.0","method":"rpc.unsubscribe","params":{"subscription":1},"id":2}
-```
-
-The response has `result: true` if that subscription existed on this connection, or `false` otherwise. Closing the connection cancels all its subscriptions. Use calls with an `id` for subscribe/unsubscribe; a call without `id` is a JSON-RPC notification and cannot return a subscription ID.
+Closing the connection cancels its subscription. `rpc.unsubscribe` is not supported. Use a call with an `id` to learn whether the subscription succeeded.
 
 ## Newline-framed streams
 
-`Server::serve_stream`, `serve_stdio`, and `serve_unix_lines` use the same `rpc.subscribe` and `rpc.unsubscribe` messages as WebSocket. Send one JSON document followed by `\n`. The server writes each response or pushed notification as one JSON document followed by `\n`. Responses and notifications share the output stream, so distinguish them by `id` versus `method`, rather than by their position. The subscription belongs to that stream session and ends when the session closes.
+`Server::serve_stream`, `serve_stdio`, and `serve_unix_lines` use the same `rpc.subscribe` message as WebSocket, with one subscription per stream session. Send one JSON document followed by `\n`. The server writes each response or pushed notification as one JSON document followed by `\n`. Responses and notifications share the output stream, so distinguish them by `id` versus `method`, rather than by their position. The subscription ends when the session closes.
 
 ## HTTP and SSE
 
-Ordinary HTTP POST at `/` handles JSON-RPC calls but does not keep a subscription open. Use a separate GET request to `/events` for a server-sent event stream. With the example server:
+Ordinary HTTP POST at `/` handles JSON-RPC calls but does not keep a subscription open. POST an event name and key to `/events` for a server-sent event stream. With the example server:
 
 ```bash
-curl -N 'http://127.0.0.1:3000/events?method=user.updated&params=%7B%22user%22%3A%22alice%22%7D'
+curl -N -X POST -H 'Content-Type: application/json' -d '{"method":"user.updated","params":{"user":"alice"}}' http://127.0.0.1:3000/events
 ```
 
-The `method` query value is the registered event name. The `params` query value is URL-encoded JSON for the topic key; omit it only when the key type can deserialize from JSON `null`. Each SSE event contains a JSON-RPC notification in its `data` field:
+The body `method` is the registered event name. The body `params` is the topic key; omit it only when the key type can deserialize from JSON `null`. Each SSE event contains a JSON-RPC notification in its `data` field:
 
 ```text
 data: {"jsonrpc":"2.0","method":"user.updated","params":{"sequence":3,"message":"update for alice"}}
 
 ```
 
-SSE uses one subscription per GET response, so these notifications do not include the WebSocket/stream `subscription` wrapper. Close the HTTP response to unsubscribe. If `Server::with_path("/rpc")` is used, the SSE path is `/rpc/events`. HTTP POST calls still go to `/rpc`. Reconnecting creates a new live subscription; there is no event replay or `Last-Event-ID` recovery.
+SSE uses one subscription per POST response. Close the HTTP response to cancel it. If `Server::with_path("/rpc")` is used, the SSE path is `/rpc/events`. HTTP POST calls still go to `/rpc`. Reconnecting creates a new live subscription; there is no event replay or `Last-Event-ID` recovery.
 
 ## Errors and current limits
 
 - On WebSocket and newline streams, an unknown event name returns JSON-RPC error `-32601`; invalid topic-key JSON returns `-32602`. SSE setup failures return HTTP 400.
-- `rpc.subscribe` and `rpc.unsubscribe` are session methods on WebSocket/newline streams. They are not available through ordinary HTTP POST or through the transport-independent `Router::handle_str` API.
-- The current session handler recognizes these methods as individual messages, not as entries in a JSON-RPC batch.
+- `rpc.subscribe` is a session method on WebSocket/newline streams. It is not available through ordinary HTTP POST or through the transport-independent `Router::handle_str` API. `rpc.unsubscribe` is not supported.
+- The current session handler recognizes subscribe calls as individual messages, not as entries in a JSON-RPC batch.
 - Subscription storage uses the actor's current unbounded `subscribe_all` channel. This implementation does not apply per-subscriber backpressure or replay.
 - The framework does not perform authorization or arbitrary filtering for a key. Applications must decide which keys a client may subscribe to before exposing the endpoint.

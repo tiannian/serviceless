@@ -121,19 +121,18 @@ newline-framed stream clients subscribe with a JSON-RPC call:
 {"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"topic.changed","params":{"key":"example"}},"id":1}
 ```
 
-The result is a numeric subscription ID scoped to that connection. Each publication sends a
+The result is `true`. Each connection accepts one subscription and each publication sends a
 JSON-RPC notification such as
-`{"jsonrpc":"2.0","method":"topic.changed","params":{"subscription":1,"value":42}}`.
-Call `rpc.unsubscribe` with `{"subscription":1}` to stop it; the result is a boolean. Closing
-the connection drops all its subscriptions. These two `rpc.*` methods are transport session
-methods, so they are available on WebSocket and newline-framed streams, not ordinary HTTP POST.
+`{"jsonrpc":"2.0","method":"topic.changed","params":42}`.
+Closing the connection cancels its subscription. `rpc.subscribe` is a transport session method
+available on WebSocket and newline-framed streams, not ordinary HTTP POST.
 
-HTTP clients can open `GET /events?method=topic.changed&params=%7B%22key%22%3A%22example%22%7D`
-(or `/rpc/events` when `with_path("/rpc")` is used). The response is an SSE stream with one
-JSON-RPC notification in each `data:` event. `params` is URL-encoded JSON; omit it for a topic
-whose key deserializes from `null`. Closing the SSE response drops its subscription. SSE is
-one-way, so ordinary calls still use HTTP POST. Events are live only; reconnecting starts a new
-subscription without replay.
+HTTP clients can POST `{"method":"topic.changed","params":{"key":"example"}}` to
+`/events` (or `/rpc/events` when `with_path("/rpc")` is used). The response is an SSE stream
+with one JSON-RPC notification in each `data:` event. Omit `params` for a topic whose key
+deserializes from `null`. Closing the SSE response cancels its subscription. Ordinary calls
+still use HTTP POST at `/`. Events are live only; reconnecting starts a new subscription
+without replay.
 
 Run the [topic notification example](jsonrpc/server/examples/topic_notifications.rs) to see one
 producer publish alternating events under the `alice` and `bob` keys:
@@ -145,14 +144,14 @@ cargo run -p serviceless-jsonrpc-server --example topic_notifications
 In separate terminals, open either or both SSE subscriptions:
 
 ```bash
-curl -N 'http://127.0.0.1:3000/events?method=user.updated&params=%7B%22user%22%3A%22alice%22%7D'
-curl -N 'http://127.0.0.1:3000/events?method=user.updated&params=%7B%22user%22%3A%22bob%22%7D'
+curl -N -X POST -H 'Content-Type: application/json' -d '{"method":"user.updated","params":{"user":"alice"}}' http://127.0.0.1:3000/events
+curl -N -X POST -H 'Content-Type: application/json' -d '{"method":"user.updated","params":{"user":"bob"}}' http://127.0.0.1:3000/events
 ```
 
 The same server accepts WebSocket connections at `ws://127.0.0.1:3000/`. Send
 `{"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"user.updated","params":{"user":"alice"}},"id":1}`
-to subscribe there. The result contains the subscription ID; subsequent `user.updated`
-notifications contain that ID and a `value` with `sequence` and `message`. This example
+to subscribe there. The result is `true`; subsequent `user.updated`
+notifications contain `sequence` and `message` in `params`. This example
 demonstrates exact-key routing: an `alice` subscriber receives only publications to the
 `alice` topic key.
 

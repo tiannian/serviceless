@@ -301,7 +301,7 @@ fn event_server() -> (
 }
 
 #[tokio::test]
-async fn websocket_subscribes_and_unsubscribes() {
+async fn websocket_allows_one_subscription() {
     let (server, address, actor_task) = event_server();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -310,7 +310,14 @@ async fn websocket_subscribes_and_unsubscribes() {
     socket.send(Message::text(json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"number.changed","params":{"key":"a"}},"id":1}).to_string())).await.unwrap();
     let reply: Value =
         serde_json::from_str(socket.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
-    assert_eq!(reply, json!({"jsonrpc":"2.0","result":1,"id":1}));
+    assert_eq!(reply, json!({"jsonrpc":"2.0","result":true,"id":1}));
+    socket.send(Message::text(json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"number.changed","params":{"key":"b"}},"id":2}).to_string())).await.unwrap();
+    let reply: Value =
+        serde_json::from_str(socket.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
+    assert_eq!(
+        reply,
+        json!({"jsonrpc":"2.0","error":{"code":-32602,"message":"Already subscribed"},"id":2})
+    );
     address
         .send(Publish {
             key: "a".into(),
@@ -321,18 +328,20 @@ async fn websocket_subscribes_and_unsubscribes() {
         serde_json::from_str(socket.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
     assert_eq!(
         event,
-        json!({"jsonrpc":"2.0","method":"number.changed","params":{"subscription":1,"value":7}})
+        json!({"jsonrpc":"2.0","method":"number.changed","params":7})
     );
     socket
         .send(Message::text(
-            json!({"jsonrpc":"2.0","method":"rpc.unsubscribe","params":{"subscription":1},"id":2})
-                .to_string(),
+            json!({"jsonrpc":"2.0","method":"rpc.unsubscribe","params":{},"id":3}).to_string(),
         ))
         .await
         .unwrap();
     let reply: Value =
         serde_json::from_str(socket.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
-    assert_eq!(reply, json!({"jsonrpc":"2.0","result":true,"id":2}));
+    assert_eq!(
+        reply,
+        json!({"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found"},"id":3})
+    );
     socket.close(None).await.unwrap();
     server_task.abort();
     address.close_service();
@@ -350,13 +359,23 @@ async fn sse_streams_topic_notifications() {
     tokio::spawn(async move {
         let _ = connection.await;
     });
+    let get_response = client
+        .send_request(
+            Request::get("http://localhost/events")
+                .body(Full::new(Bytes::new()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(get_response.status(), StatusCode::METHOD_NOT_ALLOWED);
+    drop(get_response);
     let response = client
         .send_request(
-            Request::get(
-                "http://localhost/events?method=number.changed&params=%7B%22key%22%3A%22a%22%7D",
-            )
-            .body(Full::new(Bytes::new()))
-            .unwrap(),
+            Request::post("http://localhost/events")
+                .body(Full::new(Bytes::from(
+                    json!({"method":"number.changed","params":{"key":"a"}}).to_string(),
+                )))
+                .unwrap(),
         )
         .await
         .unwrap();
@@ -399,7 +418,14 @@ async fn line_stream_pushes_topic_notifications() {
     output.read_line(&mut line).await.unwrap();
     assert_eq!(
         serde_json::from_str::<Value>(&line).unwrap(),
-        json!({"jsonrpc":"2.0","result":1,"id":1})
+        json!({"jsonrpc":"2.0","result":true,"id":1})
+    );
+    input_writer.write_all(format!("{}\n", json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"number.changed","params":{"key":"b"}},"id":2})).as_bytes()).await.unwrap();
+    line.clear();
+    output.read_line(&mut line).await.unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(&line).unwrap(),
+        json!({"jsonrpc":"2.0","error":{"code":-32602,"message":"Already subscribed"},"id":2})
     );
     address
         .send(Publish {
@@ -417,7 +443,7 @@ async fn line_stream_pushes_topic_notifications() {
     .unwrap();
     assert_eq!(
         serde_json::from_str::<Value>(&line).unwrap(),
-        json!({"jsonrpc":"2.0","method":"number.changed","params":{"subscription":1,"value":11}})
+        json!({"jsonrpc":"2.0","method":"number.changed","params":11})
     );
     drop(input_writer);
     server_task.await.unwrap().unwrap();
