@@ -29,6 +29,7 @@ impl Handler<StreamEvent> for ExternalStreamService {
 #[async_trait]
 impl Service for ExternalStreamService {
     type Stream = Once<FuturesReady<Envelope<Self>>>;
+    type Runtime = serviceless::TokioRuntime;
 
     fn metadata(&self) -> Metadata<'_> {
         Metadata {

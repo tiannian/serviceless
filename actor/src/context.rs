@@ -1,4 +1,5 @@
 use futures_util::{
+    future::{select as select_future, Either},
     stream::{empty, select, Empty, Select},
     StreamExt,
 };
@@ -206,10 +207,20 @@ where
                 while let Some(_res) = this.tasks.try_join_next() {}
 
                 trace!(target: "serviceless", "looping once begin");
-                tokio::select! {
-                    biased;
+                let event = if this.tasks.is_empty() {
+                    Some(this.receiver.next().await)
+                } else {
+                    let envelope = this.receiver.next();
+                    let task = this.tasks.join_next();
+                    futures_util::pin_mut!(envelope, task);
+                    match select_future(envelope, task).await {
+                        Either::Left((envelope, _)) => Some(envelope),
+                        Either::Right((_task, _)) => None,
+                    }
+                };
 
-                    Some(e) = this.receiver.next() => {
+                match event {
+                    Some(Some(e)) => {
                         let pending_tasks = this.tasks.len();
                         this.metrics.pending_tasks.set(pending_tasks as i64);
 
@@ -239,8 +250,8 @@ where
                         }
                     }
 
-                    Some(_res) = this.tasks.join_next(), if !this.tasks.is_empty() => {}
-
+                    Some(None) => break,
+                    None => {}
                 }
                 trace!(target: "serviceless", "looping once end");
             }

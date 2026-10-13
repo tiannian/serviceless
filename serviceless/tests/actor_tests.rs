@@ -14,6 +14,7 @@ struct TestActor {
 #[async_trait]
 impl Service for TestActor {
     type Stream = EmptyStream<Self>;
+    type Runtime = serviceless::TokioRuntime;
 
     fn metadata(&self) -> Metadata<'_> {
         Metadata { name: "test_actor" }

@@ -1,5 +1,5 @@
 [package]
-name = "serviceless"
+name = "serviceless-actor"
 version = "0.6.1"
 edition = "2021"
 description = "An simple actor model in rust, like actix"
@@ -15,15 +15,4 @@ thiserror = { workspace = true }
 futures-util = { workspace = true }
 futures-core = { workspace = true }
 
-tokio = { workspace = true, features = ["sync", "rt", "macros"] }
-
 prometheus-client = { workspace = true }
-
-[dev-dependencies]
-tokio = { workspace = true, features = [
-    "rt",
-    "sync",
-    "macros",
-    "rt-multi-thread",
-    "time",
-] }

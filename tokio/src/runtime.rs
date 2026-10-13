@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use serviceless_actor::runtime::Runtime;
 use tokio::task::JoinSet;
 
-use crate::{
+use super::{
     Error, TokioOneshotReceiver, TokioOneshotSender, TokioSpawner, TokioUnboundedReceiver,
     TokioUnboundedSender,
 };

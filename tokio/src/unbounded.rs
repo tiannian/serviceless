@@ -8,7 +8,7 @@ use futures_core::Stream;
 use serviceless_actor::runtime::{InnerOp, UnboundedReceiver, UnboundedSender};
 use tokio::sync::mpsc;
 
-use crate::Error;
+use super::Error;
 
 pub struct TokioUnboundedSender<T> {
     pub(crate) sender: mpsc::UnboundedSender<T>,
@@ -104,5 +104,9 @@ where
 
     fn close(&mut self) {
         self.receiver.close();
+    }
+
+    fn len(&self) -> usize {
+        self.receiver.len()
     }
 }

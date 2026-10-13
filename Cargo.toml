@@ -1,12 +1,13 @@
 [workspace]
-members = ["actor", "channel"]
+members = ["actor", "tokio", "serviceless", "channel"]
 resolver = "2"
 
 [workspace.dependencies]
+serviceless-actor = { path = "actor", version = "0.6.1" }
+serviceless-tokio = { path = "tokio", version = "0.6.1" }
 async-trait = "0.1.80"
 tracing = "0.1.44"
 thiserror = "2.0.17"
-futures-channel = "0.3"
 futures-core = "0.3"
 futures-sink = "0.3"
 futures-util = "0.3"

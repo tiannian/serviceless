@@ -10,6 +10,7 @@ struct PreferredService;
 #[async_trait]
 impl Service for PreferredService {
     type Stream = EmptyStream<Self>;
+    type Runtime = serviceless::TokioRuntime;
 
     fn metadata(&self) -> Metadata<'_> {
         Metadata {
