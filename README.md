@@ -63,5 +63,6 @@ The facade also exports `ReplyHandle`, `TopicEndpoint`, and `TopicAllHandle` ali
 More examples are in `serviceless/examples/`. For example:
 
 ```bash
+cargo run -p serviceless --example service_macro
 cargo run -p serviceless --example topic
 ```
