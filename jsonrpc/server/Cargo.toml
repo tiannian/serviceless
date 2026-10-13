@@ -6,7 +6,7 @@ description = "HTTP, WebSocket, Unix socket, and stdio transports for Serviceles
 license = "MIT"
 
 [dependencies]
-serviceless-jsonrpc = { path = "../jsonrpc", version = "0.7.0" }
+serviceless-jsonrpc = { path = "../core", version = "0.7.0" }
 hyper = { version = "1", features = ["server", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["server-auto", "tokio"] }
 hyper-tungstenite = "0.20"

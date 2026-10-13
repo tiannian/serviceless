@@ -10,8 +10,8 @@ one mailbox, supports async handlers and lifecycle hooks, and can publish topic 
 | `serviceless-actor` (`actor/`) | Runtime-independent actor traits, context, addresses, messages, and topics. |
 | `serviceless-tokio` (`tokio/`) | Tokio implementations of the channel, task, and runtime traits. |
 | `serviceless` (`serviceless/`) | Convenient re-exports and Tokio-specific type aliases. |
-| `serviceless-jsonrpc` (`jsonrpc/`) | Transport-independent JSON-RPC 2.0 method routing to typed actor messages. |
-| `serviceless-jsonrpc-server` (`jsonrpc-server/`) | Hyper HTTP/1.1 and HTTP/2, WebSocket, Unix socket, and stdio transports. |
+| `serviceless-jsonrpc` (`jsonrpc/core/`) | Transport-independent JSON-RPC 2.0 method routing to typed actor messages. |
+| `serviceless-jsonrpc-server` (`jsonrpc/server/`) | Hyper HTTP/1.1 and HTTP/2, WebSocket, Unix socket, and stdio transports. |
 
 The `serviceless-actor` implementation does not use `unsafe`. Its run loop uses futures rather
 than Tokio APIs, so another runtime can implement the traits in `serviceless_actor::runtime`.
