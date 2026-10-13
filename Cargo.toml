@@ -1,5 +1,5 @@
 [workspace]
-members = ["actor", "tokio", "serviceless", "macros"]
+members = ["actor", "tokio", "serviceless", "macros", "jsonrpc"]
 resolver = "2"
 
 [workspace.package]

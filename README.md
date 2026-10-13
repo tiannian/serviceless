@@ -10,6 +10,7 @@ one mailbox, supports async handlers and lifecycle hooks, and can publish topic 
 | `serviceless-actor` (`actor/`) | Runtime-independent actor traits, context, addresses, messages, and topics. |
 | `serviceless-tokio` (`tokio/`) | Tokio implementations of the channel, task, and runtime traits. |
 | `serviceless` (`serviceless/`) | Convenient re-exports and Tokio-specific type aliases. |
+| `serviceless-jsonrpc` (`jsonrpc/`) | Transport-independent JSON-RPC 2.0 method routing to typed actor messages. |
 
 The `serviceless-actor` implementation does not use `unsafe`. Its run loop uses futures rather
 than Tokio APIs, so another runtime can implement the traits in `serviceless_actor::runtime`.
@@ -66,3 +67,26 @@ More examples are in `serviceless/examples/`. For example:
 cargo run -p serviceless --example service_macro
 cargo run -p serviceless --example topic
 ```
+
+## JSON-RPC routing
+
+`serviceless-jsonrpc::Router` connects an exact method name to an actor message. The message
+must implement `serde::Deserialize`, and its `Message::Result` must implement `serde::Serialize`.
+The router decodes `params`, calls the actor, and serializes the result. It accepts a JSON string
+with `handle_str` or a `serde_json::Value` with `handle_value`; both return `None` for notifications.
+It does not provide an HTTP, WebSocket, or stdio transport.
+
+```rust,ignore
+let mut router = serviceless_jsonrpc::Router::new();
+router.method::<Add>("counter.add", address.clone());
+
+let response: Option<String> = router
+    .handle_str(r#"{"jsonrpc":"2.0","method":"counter.add","params":{"amount":2},"id":1}"#)
+    .await;
+```
+
+Methods are registered explicitly; an actor can expose any subset of its handlers. Registration
+of the same name again replaces the previous method. Batch entries are processed in input order.
+Actor delivery failures become JSON-RPC internal errors. For application-specific error codes,
+an additional mapping layer is needed; a handler returning Rust `Result<T, E>` is currently
+serialized as an ordinary result.
