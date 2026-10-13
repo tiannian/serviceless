@@ -11,6 +11,7 @@ one mailbox, supports async handlers and lifecycle hooks, and can publish topic 
 | `serviceless-tokio` (`tokio/`) | Tokio implementations of the channel, task, and runtime traits. |
 | `serviceless` (`serviceless/`) | Convenient re-exports and Tokio-specific type aliases. |
 | `serviceless-jsonrpc` (`jsonrpc/`) | Transport-independent JSON-RPC 2.0 method routing to typed actor messages. |
+| `serviceless-jsonrpc-server` (`jsonrpc-server/`) | Hyper HTTP/1.1 and HTTP/2, WebSocket, Unix socket, and stdio transports. |
 
 The `serviceless-actor` implementation does not use `unsafe`. Its run loop uses futures rather
 than Tokio APIs, so another runtime can implement the traits in `serviceless_actor::runtime`.
@@ -92,3 +93,22 @@ of the same name again replaces the previous method. Batch entries are processed
 An `Err(E)` becomes a JSON-RPC error. `JsonRpcError::new(code, message).with_data(value)` adds
 optional error data. `Err(())` and actor delivery failures become internal errors. Notifications
 never receive an error response.
+
+## JSON-RPC server
+
+`serviceless-jsonrpc-server::Server` takes a configured `Router`. Bind a TCP listener and pass it
+to `serve_tcp` for HTTP POST and WebSocket requests at `/`. The Hyper connection accepts HTTP/1.1
+and cleartext HTTP/2; WebSocket uses HTTP/1.1 Upgrade. A notification sent over HTTP receives
+status 204 with no body. Use `with_path` to change the endpoint and `with_max_message_size` to
+set the per-request size limit (default: 1 MiB).
+
+```rust,ignore
+let server = serviceless_jsonrpc_server::Server::new(router).with_path("/rpc");
+let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
+server.serve_tcp(listener).await?;
+```
+
+On Unix, `serve_unix` serves HTTP and WebSocket over a Unix socket, while `serve_unix_lines`
+serves newline-delimited JSON-RPC directly on the socket. `serve_stdio` uses the same one-JSON-
+document-per-line framing on stdin and stdout. These functions run until the listener or input
+closes; the caller owns shutdown and Unix socket path cleanup.
