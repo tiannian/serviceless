@@ -1,8 +1,10 @@
+use std::future::Future;
+
 use async_trait::async_trait;
 use serviceless_actor::runtime::{Spawner, TaskHandle};
 use tokio::task::{AbortHandle, JoinSet};
 
-use crate::Error;
+use super::Error;
 
 pub struct TokioSpawner<T> {
     pub(crate) tasks: JoinSet<T>,
@@ -51,6 +53,12 @@ where
         } else {
             None
         }
+    }
+
+    fn try_join_next(&mut self) -> Option<Result<T, Self::Error>> {
+        self.tasks
+            .try_join_next()
+            .map(|result| result.map_err(Error::JoinError))
     }
 }
 

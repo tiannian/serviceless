@@ -1,14 +1,18 @@
 [workspace]
-members = ["actor", "channel"]
+members = ["actor", "tokio", "serviceless", "macros"]
 resolver = "2"
 
+[workspace.package]
+version = "0.7.0"
+
 [workspace.dependencies]
+serviceless-actor = { path = "actor", version = "0.7.0" }
+serviceless-tokio = { path = "tokio", version = "0.7.0" }
+serviceless-macros = { path = "macros", version = "0.7.0" }
 async-trait = "0.1.80"
 tracing = "0.1.44"
 thiserror = "2.0.17"
-futures-channel = "0.3"
 futures-core = "0.3"
-futures-sink = "0.3"
 futures-util = "0.3"
 tokio = { version = "1.37.0", default-features = false }
 prometheus-client = "0.25.0"

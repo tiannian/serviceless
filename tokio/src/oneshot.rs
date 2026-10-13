@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use serviceless_actor::runtime::{InnerOp, OneshotReceiver, OneshotSender};
 use tokio::sync::oneshot;
 
-use crate::Error;
+use super::Error;
 
 pub struct TokioOneshotSender<T> {
     pub(crate) sender: oneshot::Sender<T>,
@@ -69,9 +69,7 @@ where
     type Error = Error;
 
     async fn recv(mut self) -> Result<T, Self::Error> {
-        self.receiver
-            .try_recv()
-            .map_err(|_| Error::OneshotChannelClosed)
+        self.receiver.await.map_err(|_| Error::OneshotChannelClosed)
     }
 
     fn close(&mut self) {

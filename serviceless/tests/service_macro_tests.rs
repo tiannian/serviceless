@@ -1,0 +1,106 @@
+use serviceless::{
+    runtime::Runtime, service, Context, EmptyStream, Envelope, Metadata, Service, TokioRuntime,
+};
+use std::marker::PhantomData;
+
+struct DefaultService;
+
+#[service]
+impl Service for DefaultService {}
+
+struct GenericService<T>(PhantomData<T>);
+
+#[service]
+impl<T: Send + Sync + 'static> Service for GenericService<T> {}
+
+struct SelectedRuntime;
+
+impl Runtime for SelectedRuntime {
+    type Error = <TokioRuntime as Runtime>::Error;
+
+    type UnboundedSender<T>
+        = <TokioRuntime as Runtime>::UnboundedSender<T>
+    where
+        T: Send;
+    type UnboundedReceiver<T>
+        = <TokioRuntime as Runtime>::UnboundedReceiver<T>
+    where
+        T: Send;
+
+    fn unbounded<T>() -> (Self::UnboundedSender<T>, Self::UnboundedReceiver<T>)
+    where
+        T: Send,
+    {
+        TokioRuntime::unbounded()
+    }
+
+    type OneshotSender<T>
+        = <TokioRuntime as Runtime>::OneshotSender<T>
+    where
+        T: Send;
+    type OneshotReceiver<T>
+        = <TokioRuntime as Runtime>::OneshotReceiver<T>
+    where
+        T: Send;
+
+    fn oneshot<T>() -> (Self::OneshotSender<T>, Self::OneshotReceiver<T>)
+    where
+        T: Send,
+    {
+        TokioRuntime::oneshot()
+    }
+
+    type Spawner<T>
+        = <TokioRuntime as Runtime>::Spawner<T>
+    where
+        T: Send + 'static;
+
+    fn spawner<T>() -> Self::Spawner<T>
+    where
+        T: Send + 'static,
+    {
+        TokioRuntime::spawner()
+    }
+}
+
+struct ConfiguredService;
+
+#[service(runtime = "SelectedRuntime", name = "configured")]
+impl Service for ConfiguredService {
+    type Stream = EmptyStream<Self>;
+}
+
+struct CustomMetadata;
+
+#[service]
+impl Service for CustomMetadata {
+    type Stream = futures_util::stream::Empty<Envelope<Self>>;
+
+    fn metadata(&self) -> Metadata<'_> {
+        Metadata { name: "custom" }
+    }
+
+    async fn started(&mut self, _ctx: &mut Context<Self>) {}
+}
+
+fn assert_tokio_service<T: Service<Runtime = TokioRuntime>>() {}
+
+#[test]
+fn defaults_supply_runtime_stream_and_type_name() {
+    assert_tokio_service::<DefaultService>();
+    let service = DefaultService;
+    assert_eq!(service.metadata().name, "DefaultService");
+    let _context = Context::new(&service);
+
+    let generic = GenericService::<u32>(PhantomData);
+    assert_eq!(generic.metadata().name, "GenericService");
+}
+
+#[test]
+fn options_and_explicit_members_are_preserved() {
+    fn assert_selected_service<T: Service<Runtime = SelectedRuntime>>() {}
+    assert_selected_service::<ConfiguredService>();
+    assert_tokio_service::<CustomMetadata>();
+    assert_eq!(ConfiguredService.metadata().name, "configured");
+    assert_eq!(CustomMetadata.metadata().name, "custom");
+}

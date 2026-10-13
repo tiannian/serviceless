@@ -1,146 +1,68 @@
 # Serviceless
 
-Serviceless is a small **async actor** library for Rust, inspired by Actix-style APIs but kept
-minimal: one mailbox per [`Service`], fully async handlers, and addresses for typed messaging plus
-optional **topic** notifications.
+Serviceless is a small async actor library for Rust. A service processes typed messages through
+one mailbox, supports async handlers and lifecycle hooks, and can publish topic notifications.
 
-The implementation of this crate does not use `unsafe`.
+## Crates
 
-## Features
+| Crate | Purpose |
+| --- | --- |
+| `serviceless-actor` (`actor/`) | Runtime-independent actor traits, context, addresses, messages, and topics. |
+| `serviceless-tokio` (`tokio/`) | Tokio implementations of the channel, task, and runtime traits. |
+| `serviceless` (`serviceless/`) | Convenient re-exports and Tokio-specific type aliases. |
 
-- **Async actors** — Each service runs a mailbox loop; `started` / `stopped` hooks and
-  [`Handler::handle`](https://docs.rs/serviceless/latest/serviceless/trait.Handler.html) are
-  `async` (use the [`async_trait`](https://docs.rs/async-trait) crate).
-- **Typed messages** — Implement [`Message`](https://docs.rs/serviceless/latest/serviceless/trait.Message.html)
-  and [`Handler`](https://docs.rs/serviceless/latest/serviceless/trait.Handler.html) for your own
-  types instead of manual routing tables.
-- **`call` and `send`** — [`ServiceAddress::call`](https://docs.rs/serviceless/latest/serviceless/struct.ServiceAddress.html#method.call)
-  awaits `M::Result`; [`send`](https://docs.rs/serviceless/latest/serviceless/struct.ServiceAddress.html#method.send)
-  enqueues work and drops the handler return value.
-- **Topics (pub/sub-style)** — [`Topic`](https://docs.rs/serviceless/latest/serviceless/trait.Topic.html),
-  [`RoutedTopic`](https://docs.rs/serviceless/latest/serviceless/trait.RoutedTopic.html), and
-  [`TopicEndpoint`](https://docs.rs/serviceless/latest/serviceless/struct.TopicEndpoint.html) for
-  one-shot subscribe / publish flows, still serialized through the actor mailbox.
-- **External envelope streams** — [`Context::with_stream`](https://docs.rs/serviceless/latest/serviceless/struct.Context.html#method.with_stream)
-  merges another stream of [`Envelope`](https://docs.rs/serviceless/latest/serviceless/struct.Envelope.html)s
-  with the internal mailbox.
-- **Typed narrowing** — [`ServiceAddress::into_address`](https://docs.rs/serviceless/latest/serviceless/struct.ServiceAddress.html#method.into_address)
-  builds a single-message-type [`Address`](https://docs.rs/serviceless/latest/serviceless/struct.Address.html)
-  plus a forwarding future you spawn next to the main run future.
-- **Bring your own runtime** — The library returns a `run` future; you spawn it (examples use Tokio).
-  There are **no optional Cargo `[features]`** on this crate: the full API is always available.
+The `serviceless-actor` implementation does not use `unsafe`. Its run loop uses futures rather
+than Tokio APIs, so another runtime can implement the traits in `serviceless_actor::runtime`.
 
-## Documentation
-
-- Run **`cargo doc --open -p serviceless`** for full API reference.
-- Narrative guide (actor usage, caveats, pub/sub): see the **`serviceless::docs`** module in the
-  generated docs (overview, services, messaging, pub/sub, runtime).
-
-## Usage
-
-### Service
-
-A `Service` is your actor type. You must set the associated `Stream` type (often
-[`EmptyStream<Self>`](https://docs.rs/serviceless/latest/serviceless/type.EmptyStream.html) when
-you only use the built-in mailbox).
+## Example
 
 ```rust
 use async_trait::async_trait;
-use serviceless::{Context, EmptyStream, Service};
+use serviceless::{service, Context, Handler, Message, Service};
 
-#[derive(Default)]
-pub struct MyActor;
+struct Counter(u32);
 
-#[async_trait]
-impl Service for MyActor {
-    type Stream = EmptyStream<Self>;
-
-    async fn started(&mut self, _ctx: &mut Context<Self, Self::Stream>) {
-        // runs once before the mailbox loop
-    }
-
-    async fn stopped(&mut self, _ctx: &mut Context<Self, Self::Stream>) {
-        // runs after the mailbox is closed
-    }
+#[service(name = "counter")]
+impl Service for Counter {
 }
-```
 
-### Starting and stopping
-
-Build a [`Context`](https://docs.rs/serviceless/latest/serviceless/struct.Context.html), start the
-service, then **spawn** the returned run future on your async runtime. Until that future is polled,
-mailbox work will not run.
-
-```rust
-use serviceless::Context;
-
-# use async_trait::async_trait;
-# use serviceless::{EmptyStream, Service};
-# #[derive(Default)] struct MyActor;
-# #[async_trait] impl Service for MyActor { type Stream = EmptyStream<Self>; }
-
-let actor = MyActor::default();
-let ctx = Context::new();
-let (addr, run) = actor.start_by_context(ctx);
-tokio::spawn(run);
-```
-
-Stop from inside the actor with [`Context::stop`](https://docs.rs/serviceless/latest/serviceless/struct.Context.html#method.stop),
-or from outside with
-[`ServiceAddress::close_service`](https://docs.rs/serviceless/latest/serviceless/struct.ServiceAddress.html#method.close_service).
-
-### Message and handler
-
-Declare a [`Message`](https://docs.rs/serviceless/latest/serviceless/trait.Message.html) (with
-`type Result`) and implement [`Handler`](https://docs.rs/serviceless/latest/serviceless/trait.Handler.html)
-for your service.
-
-```rust
-use async_trait::async_trait;
-use serviceless::{Context, EmptyStream, Handler, Message, Service};
-
-#[derive(Default)]
-pub struct Service0;
-#[async_trait]
-impl Service for Service0 { type Stream = EmptyStream<Self>; }
-
-pub struct U8(pub u8);
-
-impl Message for U8 {
-    type Result = U8;
+struct Add(u32);
+impl Message for Add {
+    type Result = u32;
 }
 
 #[async_trait]
-impl Handler<U8> for Service0 {
-    async fn handle(&mut self, message: U8, _ctx: &mut Context<Self, Self::Stream>) -> U8 {
-        U8(message.0 + 2)
+impl Handler<Add> for Counter {
+    async fn handle(&mut self, message: Add, _ctx: &mut Context<Self>) -> u32 {
+        self.0 += message.0;
+        self.0
     }
+}
+
+#[tokio::main]
+async fn main() {
+    let service = Counter(0);
+    let (address, run) = Context::new(&service).run(service);
+    let task = tokio::spawn(run);
+
+    assert_eq!(address.call(Add(2)).await.unwrap(), 2);
+    address.close_service();
+    task.await.unwrap();
 }
 ```
 
-### Address: `call`, `send`, and topics
+The `Service` name in `serviceless` refers to the core `RuntimedService` trait. The
+`#[service]` attribute supplies `TokioRuntime`, `EmptyStream<Self>`, and a metadata name based on
+the type name by default. Use `#[service(name = "counter", runtime = "path::CustomRuntime")]`
+to override either value. An explicit `type Stream` or `metadata()` method is kept; `name` and an
+explicit `metadata()` method cannot be used together. Handler implementations still use
+`#[async_trait]`.
 
-[`ServiceAddress`](https://docs.rs/serviceless/latest/serviceless/struct.ServiceAddress.html) is
-cloneable and is how other tasks talk to the actor.
+The facade also exports `ReplyHandle`, `TopicEndpoint`, and `TopicAllHandle` aliases for Tokio.
 
-- **`call`** — `async`; waits for `M::Result`. If the service has stopped, you get
-  [`Error::ServiceStoped`](https://docs.rs/serviceless/latest/serviceless/enum.Error.html#variant.ServiceStoped).
-- **`send`** — synchronous for the caller; still returns `Result` and drops the handler return value.
-- **Preferred dispatch** — `call` and `send` dispatch through
-  [`Handler::handle_preferred`](https://docs.rs/serviceless/latest/serviceless/trait.Handler.html#method.handle_preferred).
-  The default `handle_preferred` implementation calls `handle`, then uses
-  [`ReplyHandle`](https://docs.rs/serviceless/latest/serviceless/struct.ReplyHandle.html) for replies.
-  You can override `handle_preferred` to spawn a task and reply later so the current handler path
-  does not block mailbox progress (see `actor/examples/preferred.rs`).
-- **`subscribe`** — synchronous enqueue with a **topic key** argument; returns `Result` of a
-  `Future` you await for the next matching publication (see `serviceless::docs::pubsub` and
-  `examples/topic.rs`).
-
-## Examples
-
-Runnable examples live under `actor/examples/` (e.g. `topic.rs`, `single.rs`, `external_stream.rs`,
-`preferred.rs`).
+More examples are in `serviceless/examples/`. For example:
 
 ```bash
+cargo run -p serviceless --example service_macro
 cargo run -p serviceless --example topic
 ```

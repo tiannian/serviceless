@@ -7,6 +7,7 @@ pub struct Service0 {}
 #[async_trait]
 impl Service for Service0 {
     type Stream = EmptyStream<Self>;
+    type Runtime = serviceless::TokioRuntime;
 
     fn metadata(&self) -> Metadata<'_> {
         Metadata { name: "service0" }
