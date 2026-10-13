@@ -1,6 +1,9 @@
 //! Transport-independent JSON-RPC 2.0 routing to typed actor messages.
 
-use std::{collections::HashMap, future::Future, marker::PhantomData, pin::Pin, sync::Arc};
+use std::{
+    collections::HashMap, convert::Infallible, future::Future, marker::PhantomData, pin::Pin,
+    sync::Arc,
+};
 
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::{json, Value};
@@ -46,43 +49,6 @@ struct TypedMethod<M, A> {
 impl<M, A> ErasedMethod for TypedMethod<M, A>
 where
     M: Message + DeserializeOwned + Send + 'static,
-    M::Result: Serialize + Send,
-    A: RpcAddress<M> + 'static,
-{
-    fn invoke(
-        &self,
-        params: Value,
-        notification: bool,
-    ) -> BoxFuture<'_, Result<Option<Value>, JsonRpcError>> {
-        Box::pin(async move {
-            let message: M =
-                serde_json::from_value(params).map_err(|_| JsonRpcError::invalid_params())?;
-            if notification {
-                self.address
-                    .send_rpc(message)
-                    .map_err(|_| JsonRpcError::internal())?;
-                Ok(None)
-            } else {
-                let result = self
-                    .address
-                    .call_rpc(message)
-                    .await
-                    .map_err(|_| JsonRpcError::internal())?;
-                let value = serde_json::to_value(result).map_err(|_| JsonRpcError::internal())?;
-                Ok(Some(value))
-            }
-        })
-    }
-}
-
-struct TypedMethodWithError<M, A> {
-    address: A,
-    _message: PhantomData<fn(M)>,
-}
-
-impl<M, A> ErasedMethod for TypedMethodWithError<M, A>
-where
-    M: Message + DeserializeOwned + Send + 'static,
     M::Result: RpcResult + Send,
     A: RpcAddress<M> + 'static,
 {
@@ -113,6 +79,7 @@ where
 
 /// Converts a handler's `Result<R, E>` into a JSON-RPC success or error.
 /// Implemented for `Result<R, E>` when `R: Serialize` and `E: Into<JsonRpcError>`.
+/// Use `Infallible` or `()` as the error type for handlers without business errors.
 pub trait RpcResult {
     fn into_rpc_result(self) -> Result<Value, JsonRpcError>;
 }
@@ -130,7 +97,7 @@ where
     }
 }
 
-/// A JSON-RPC error returned by a handler registered with `method_with_error`.
+/// A JSON-RPC error returned by an actor handler.
 #[derive(Debug)]
 pub struct JsonRpcError {
     pub code: i32,
@@ -160,6 +127,18 @@ impl JsonRpcError {
     }
 }
 
+impl From<Infallible> for JsonRpcError {
+    fn from(value: Infallible) -> Self {
+        match value {}
+    }
+}
+
+impl From<()> for JsonRpcError {
+    fn from(_: ()) -> Self {
+        Self::internal()
+    }
+}
+
 fn error(code: i32, message: &'static str, id: Value) -> Value {
     error_response(JsonRpcError::new(code, message), id)
 }
@@ -183,31 +162,11 @@ impl Router {
         Self::default()
     }
 
-    /// Register a typed actor message under an exact JSON-RPC method name.
+    /// Register a typed actor message returning `Result<R, E>` under an exact method name.
+    /// `Ok(R)` becomes a JSON-RPC result; `Err(E)` becomes a JSON-RPC error.
+    /// Use `Infallible` or `()` for methods without business errors.
     /// Registration of an existing name replaces the previous method.
     pub fn method<M>(
-        &mut self,
-        name: impl Into<String>,
-        address: impl RpcAddress<M> + 'static,
-    ) -> &mut Self
-    where
-        M: Message + DeserializeOwned + Send + 'static,
-        M::Result: Serialize + Send,
-    {
-        self.methods.insert(
-            name.into(),
-            Arc::new(TypedMethod::<M, _> {
-                address,
-                _message: PhantomData,
-            }),
-        );
-        self
-    }
-
-    /// Register a message whose result is `Result<R, E>`.
-    /// `Ok(R)` becomes a JSON-RPC result; `Err(E)` becomes a JSON-RPC error.
-    /// Notifications never receive an error response.
-    pub fn method_with_error<M>(
         &mut self,
         name: impl Into<String>,
         address: impl RpcAddress<M> + 'static,
@@ -218,7 +177,7 @@ impl Router {
     {
         self.methods.insert(
             name.into(),
-            Arc::new(TypedMethodWithError::<M, _> {
+            Arc::new(TypedMethod::<M, _> {
                 address,
                 _message: PhantomData,
             }),

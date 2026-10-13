@@ -14,27 +14,30 @@ struct Add {
     amount: i64,
 }
 impl Message for Add {
-    type Result = i64;
+    type Result = Result<i64, ()>;
 }
 
 #[async_trait]
 impl Handler<Add> for Counter {
-    async fn handle(&mut self, msg: Add, _: &mut Context<Self>) -> i64 {
+    async fn handle(&mut self, msg: Add, _: &mut Context<Self>) -> Result<i64, ()> {
+        if msg.amount < 0 {
+            return Err(());
+        }
         self.0 += msg.amount;
-        self.0
+        Ok(self.0)
     }
 }
 
 #[derive(Deserialize)]
 struct Get;
 impl Message for Get {
-    type Result = i64;
+    type Result = Result<i64, Infallible>;
 }
 
 #[async_trait]
 impl Handler<Get> for Counter {
-    async fn handle(&mut self, _: Get, _: &mut Context<Self>) -> i64 {
-        self.0
+    async fn handle(&mut self, _: Get, _: &mut Context<Self>) -> Result<i64, Infallible> {
+        Ok(self.0)
     }
 }
 
@@ -140,6 +143,12 @@ async fn reports_protocol_errors_and_filters_batch_notifications() {
     );
     assert_eq!(
         router
+            .handle_value(json!({"jsonrpc":"2.0","method":"add","params":{"amount":-1},"id":3}))
+            .await,
+        Some(json!({"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"},"id":3}))
+    );
+    assert_eq!(
+        router
             .handle_value(json!([
                 {"jsonrpc":"2.0","method":"add","params":{"amount":4}},
                 {"jsonrpc":"2.0","method":"add","params":{"amount":1},"id":"x"},
@@ -163,13 +172,13 @@ async fn reports_protocol_errors_and_filters_batch_notifications() {
 }
 
 #[tokio::test]
-async fn method_with_error_converts_handler_results_and_preserves_error_data() {
+async fn method_converts_handler_errors_and_preserves_error_data() {
     let counter = Counter(0);
     let (address, run) = Context::new(&counter).run(counter);
     let task = tokio::spawn(run);
     let mut router = Router::new();
     router
-        .method_with_error::<AddChecked>("add_checked", address.clone())
+        .method::<AddChecked>("add_checked", address.clone())
         .method::<Get>("get", address.clone());
 
     assert_eq!(
@@ -206,3 +215,4 @@ async fn method_with_error_converts_handler_results_and_preserves_error_data() {
     address.close_service();
     task.await.unwrap();
 }
+use std::convert::Infallible;

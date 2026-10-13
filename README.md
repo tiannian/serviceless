@@ -71,8 +71,10 @@ cargo run -p serviceless --example topic
 ## JSON-RPC routing
 
 `serviceless-jsonrpc::Router` connects an exact method name to an actor message. The message
-must implement `serde::Deserialize`, and its `Message::Result` must implement `serde::Serialize`.
-The router decodes `params`, calls the actor, and serializes the result. It accepts a JSON string
+must implement `serde::Deserialize`, and its `Message::Result` must be `Result<R, E>` with
+`R: serde::Serialize` and `E: Into<JsonRpcError>`. Use `std::convert::Infallible` or `()` as the
+error type for methods without business errors. The router decodes `params`, calls the actor,
+and serializes `Ok(R)` as the JSON-RPC result. It accepts a JSON string
 with `handle_str` or a `serde_json::Value` with `handle_value`; both return `None` for notifications.
 It does not provide an HTTP, WebSocket, or stdio transport.
 
@@ -87,8 +89,6 @@ let response: Option<String> = router
 
 Methods are registered explicitly; an actor can expose any subset of its handlers. Registration
 of the same name again replaces the previous method. Batch entries are processed in input order.
-Actor delivery failures become JSON-RPC internal errors. For application-specific error codes,
-register a handler returning `Result<R, E>` with `method_with_error::<M>`. Its `Ok(R)` value is
-serialized as a JSON-RPC result, while `Err(E)` is converted with `E: Into<JsonRpcError>` into a
-JSON-RPC error. `JsonRpcError::new(code, message).with_data(value)` adds optional error data.
-Notifications never receive an error response. Actor delivery failures remain internal errors.
+An `Err(E)` becomes a JSON-RPC error. `JsonRpcError::new(code, message).with_data(value)` adds
+optional error data. `Err(())` and actor delivery failures become internal errors. Notifications
+never receive an error response.
