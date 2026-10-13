@@ -110,6 +110,9 @@ server.serve_tcp(listener).await?;
 
 ### Topic notifications
 
+See the [English guide](docs/jsonrpc-notification.md) or
+[中文指南](docs/jsonrpc-notification.zh.md) for the full implementation and subscription flow.
+
 Register a typed topic with `router.topic::<MyTopic>("topic.changed", address.clone())`.
 `MyTopic` must deserialize from JSON, and its item must serialize to JSON. WebSocket and
 newline-framed stream clients subscribe with a JSON-RPC call:
