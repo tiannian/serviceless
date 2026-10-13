@@ -1,0 +1,15 @@
+[package]
+name = "serviceless-macros"
+version = "0.6.1"
+edition = "2021"
+description = "Procedural macros for serviceless"
+license = "MIT"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro-crate = "3.5"
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }

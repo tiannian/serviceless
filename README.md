@@ -18,18 +18,12 @@ than Tokio APIs, so another runtime can implement the traits in `serviceless_act
 
 ```rust
 use async_trait::async_trait;
-use serviceless::{Context, EmptyStream, Handler, Message, Metadata, Service, TokioRuntime};
+use serviceless::{service, Context, Handler, Message, Service};
 
 struct Counter(u32);
 
-#[async_trait]
+#[service(name = "counter")]
 impl Service for Counter {
-    type Stream = EmptyStream<Self>;
-    type Runtime = TokioRuntime;
-
-    fn metadata(&self) -> Metadata<'_> {
-        Metadata { name: "counter" }
-    }
 }
 
 struct Add(u32);
@@ -57,9 +51,14 @@ async fn main() {
 }
 ```
 
-The `Service` name in `serviceless` refers to the core `RuntimedService` trait. Set its
-`Runtime` associated type to `TokioRuntime` when using the Tokio adapter. The facade also exports
-`ReplyHandle`, `TopicEndpoint`, and `TopicAllHandle` aliases for that runtime.
+The `Service` name in `serviceless` refers to the core `RuntimedService` trait. The
+`#[service]` attribute supplies `TokioRuntime`, `EmptyStream<Self>`, and a metadata name based on
+the type name by default. Use `#[service(name = "counter", runtime = "path::CustomRuntime")]`
+to override either value. An explicit `type Stream` or `metadata()` method is kept; `name` and an
+explicit `metadata()` method cannot be used together. Handler implementations still use
+`#[async_trait]`.
+
+The facade also exports `ReplyHandle`, `TopicEndpoint`, and `TopicAllHandle` aliases for Tokio.
 
 More examples are in `serviceless/examples/`. For example:
 

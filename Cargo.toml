@@ -1,5 +1,5 @@
 [workspace]
-members = ["actor", "tokio", "serviceless"]
+members = ["actor", "tokio", "serviceless", "serviceless-macros"]
 resolver = "2"
 
 [workspace.dependencies]
