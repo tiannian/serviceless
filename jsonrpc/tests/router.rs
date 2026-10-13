@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use serviceless::{service, Context, Handler, Message, Service};
-use serviceless_jsonrpc::Router;
+use serviceless_jsonrpc::{JsonRpcError, Router};
 
 struct Counter(i64);
 
@@ -35,6 +35,38 @@ impl Message for Get {
 impl Handler<Get> for Counter {
     async fn handle(&mut self, _: Get, _: &mut Context<Self>) -> i64 {
         self.0
+    }
+}
+
+#[derive(Deserialize)]
+struct AddChecked {
+    amount: i64,
+}
+
+impl Message for AddChecked {
+    type Result = Result<i64, CounterError>;
+}
+
+struct CounterError;
+
+impl From<CounterError> for JsonRpcError {
+    fn from(_: CounterError) -> Self {
+        JsonRpcError::new(1001, "Amount must be positive").with_data(json!({"field": "amount"}))
+    }
+}
+
+#[async_trait]
+impl Handler<AddChecked> for Counter {
+    async fn handle(
+        &mut self,
+        msg: AddChecked,
+        _: &mut Context<Self>,
+    ) -> Result<i64, CounterError> {
+        if msg.amount <= 0 {
+            return Err(CounterError);
+        }
+        self.0 += msg.amount;
+        Ok(self.0)
     }
 }
 
@@ -124,6 +156,51 @@ async fn reports_protocol_errors_and_filters_batch_notifications() {
             .handle_value(json!([{"jsonrpc":"2.0","method":"add","params":{"amount":1}}]))
             .await,
         None
+    );
+
+    address.close_service();
+    task.await.unwrap();
+}
+
+#[tokio::test]
+async fn method_with_error_converts_handler_results_and_preserves_error_data() {
+    let counter = Counter(0);
+    let (address, run) = Context::new(&counter).run(counter);
+    let task = tokio::spawn(run);
+    let mut router = Router::new();
+    router
+        .method_with_error::<AddChecked>("add_checked", address.clone())
+        .method::<Get>("get", address.clone());
+
+    assert_eq!(
+        router
+            .handle_value(
+                json!({"jsonrpc":"2.0","method":"add_checked","params":{"amount":3},"id":1})
+            )
+            .await,
+        Some(json!({"jsonrpc":"2.0","result":3,"id":1}))
+    );
+    assert_eq!(
+        router
+            .handle_value(
+                json!({"jsonrpc":"2.0","method":"add_checked","params":{"amount":0},"id":"bad"})
+            )
+            .await,
+        Some(
+            json!({"jsonrpc":"2.0","error":{"code":1001,"message":"Amount must be positive","data":{"field":"amount"}},"id":"bad"})
+        )
+    );
+    assert_eq!(
+        router
+            .handle_value(json!({"jsonrpc":"2.0","method":"add_checked","params":{"amount":0}}))
+            .await,
+        None
+    );
+    assert_eq!(
+        router
+            .handle_value(json!({"jsonrpc":"2.0","method":"get","id":2}))
+            .await,
+        Some(json!({"jsonrpc":"2.0","result":3,"id":2}))
     );
 
     address.close_service();

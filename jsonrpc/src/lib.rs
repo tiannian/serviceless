@@ -35,7 +35,7 @@ trait ErasedMethod: Send + Sync {
         &self,
         params: Value,
         notification: bool,
-    ) -> BoxFuture<'_, Result<Option<Value>, RpcError>>;
+    ) -> BoxFuture<'_, Result<Option<Value>, JsonRpcError>>;
 }
 
 struct TypedMethod<M, A> {
@@ -53,51 +53,123 @@ where
         &self,
         params: Value,
         notification: bool,
-    ) -> BoxFuture<'_, Result<Option<Value>, RpcError>> {
+    ) -> BoxFuture<'_, Result<Option<Value>, JsonRpcError>> {
         Box::pin(async move {
             let message: M =
-                serde_json::from_value(params).map_err(|_| RpcError::invalid_params())?;
+                serde_json::from_value(params).map_err(|_| JsonRpcError::invalid_params())?;
             if notification {
                 self.address
                     .send_rpc(message)
-                    .map_err(|_| RpcError::internal())?;
+                    .map_err(|_| JsonRpcError::internal())?;
                 Ok(None)
             } else {
                 let result = self
                     .address
                     .call_rpc(message)
                     .await
-                    .map_err(|_| RpcError::internal())?;
-                let value = serde_json::to_value(result).map_err(|_| RpcError::internal())?;
+                    .map_err(|_| JsonRpcError::internal())?;
+                let value = serde_json::to_value(result).map_err(|_| JsonRpcError::internal())?;
                 Ok(Some(value))
             }
         })
     }
 }
 
-#[derive(Debug)]
-struct RpcError {
-    code: i32,
-    message: &'static str,
+struct TypedMethodWithError<M, A> {
+    address: A,
+    _message: PhantomData<fn(M)>,
 }
 
-impl RpcError {
-    fn invalid_params() -> Self {
-        Self {
-            code: -32602,
-            message: "Invalid params",
+impl<M, A> ErasedMethod for TypedMethodWithError<M, A>
+where
+    M: Message + DeserializeOwned + Send + 'static,
+    M::Result: RpcResult + Send,
+    A: RpcAddress<M> + 'static,
+{
+    fn invoke(
+        &self,
+        params: Value,
+        notification: bool,
+    ) -> BoxFuture<'_, Result<Option<Value>, JsonRpcError>> {
+        Box::pin(async move {
+            let message: M =
+                serde_json::from_value(params).map_err(|_| JsonRpcError::invalid_params())?;
+            if notification {
+                self.address
+                    .send_rpc(message)
+                    .map_err(|_| JsonRpcError::internal())?;
+                Ok(None)
+            } else {
+                let result = self
+                    .address
+                    .call_rpc(message)
+                    .await
+                    .map_err(|_| JsonRpcError::internal())?;
+                result.into_rpc_result().map(Some)
+            }
+        })
+    }
+}
+
+/// Converts a handler's `Result<R, E>` into a JSON-RPC success or error.
+/// Implemented for `Result<R, E>` when `R: Serialize` and `E: Into<JsonRpcError>`.
+pub trait RpcResult {
+    fn into_rpc_result(self) -> Result<Value, JsonRpcError>;
+}
+
+impl<R, E> RpcResult for Result<R, E>
+where
+    R: Serialize,
+    E: Into<JsonRpcError>,
+{
+    fn into_rpc_result(self) -> Result<Value, JsonRpcError> {
+        match self {
+            Ok(value) => serde_json::to_value(value).map_err(|_| JsonRpcError::internal()),
+            Err(error) => Err(error.into()),
         }
     }
-    fn internal() -> Self {
+}
+
+/// A JSON-RPC error returned by a handler registered with `method_with_error`.
+#[derive(Debug)]
+pub struct JsonRpcError {
+    pub code: i32,
+    pub message: String,
+    pub data: Option<Value>,
+}
+
+impl JsonRpcError {
+    pub fn new(code: i32, message: impl Into<String>) -> Self {
         Self {
-            code: -32603,
-            message: "Internal error",
+            code,
+            message: message.into(),
+            data: None,
         }
+    }
+
+    pub fn with_data(mut self, data: Value) -> Self {
+        self.data = Some(data);
+        self
+    }
+
+    fn invalid_params() -> Self {
+        Self::new(-32602, "Invalid params")
+    }
+    fn internal() -> Self {
+        Self::new(-32603, "Internal error")
     }
 }
 
 fn error(code: i32, message: &'static str, id: Value) -> Value {
-    json!({"jsonrpc": "2.0", "error": {"code": code, "message": message}, "id": id})
+    error_response(JsonRpcError::new(code, message), id)
+}
+
+fn error_response(error: JsonRpcError, id: Value) -> Value {
+    let mut details = json!({"code": error.code, "message": error.message});
+    if let Some(data) = error.data {
+        details["data"] = data;
+    }
+    json!({"jsonrpc": "2.0", "error": details, "id": id})
 }
 
 /// A JSON-RPC 2.0 method table. It does not own a network listener or transport.
@@ -125,6 +197,28 @@ impl Router {
         self.methods.insert(
             name.into(),
             Arc::new(TypedMethod::<M, _> {
+                address,
+                _message: PhantomData,
+            }),
+        );
+        self
+    }
+
+    /// Register a message whose result is `Result<R, E>`.
+    /// `Ok(R)` becomes a JSON-RPC result; `Err(E)` becomes a JSON-RPC error.
+    /// Notifications never receive an error response.
+    pub fn method_with_error<M>(
+        &mut self,
+        name: impl Into<String>,
+        address: impl RpcAddress<M> + 'static,
+    ) -> &mut Self
+    where
+        M: Message + DeserializeOwned + Send + 'static,
+        M::Result: RpcResult + Send,
+    {
+        self.methods.insert(
+            name.into(),
+            Arc::new(TypedMethodWithError::<M, _> {
                 address,
                 _message: PhantomData,
             }),
@@ -191,10 +285,7 @@ impl Router {
         let params = request.remove("params").unwrap_or(Value::Null);
         let outcome = match self.methods.get(&method) {
             Some(handler) => handler.invoke(params, notification).await,
-            None => Err(RpcError {
-                code: -32601,
-                message: "Method not found",
-            }),
+            None => Err(JsonRpcError::new(-32601, "Method not found")),
         };
         if notification {
             return None;
@@ -203,7 +294,7 @@ impl Router {
         Some(match outcome {
             Ok(Some(result)) => json!({"jsonrpc": "2.0", "result": result, "id": id}),
             Ok(None) => error(-32603, "Internal error", id),
-            Err(err) => error(err.code, err.message, id),
+            Err(err) => error_response(err, id),
         })
     }
 }

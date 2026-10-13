@@ -88,5 +88,7 @@ let response: Option<String> = router
 Methods are registered explicitly; an actor can expose any subset of its handlers. Registration
 of the same name again replaces the previous method. Batch entries are processed in input order.
 Actor delivery failures become JSON-RPC internal errors. For application-specific error codes,
-an additional mapping layer is needed; a handler returning Rust `Result<T, E>` is currently
-serialized as an ordinary result.
+register a handler returning `Result<R, E>` with `method_with_error::<M>`. Its `Ok(R)` value is
+serialized as a JSON-RPC result, while `Err(E)` is converted with `E: Into<JsonRpcError>` into a
+JSON-RPC error. `JsonRpcError::new(code, message).with_data(value)` adds optional error data.
+Notifications never receive an error response. Actor delivery failures remain internal errors.
