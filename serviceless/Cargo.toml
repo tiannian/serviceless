@@ -9,7 +9,7 @@ readme = "../README.md"
 [dependencies]
 serviceless-actor = { workspace = true }
 serviceless-tokio = { workspace = true }
-serviceless-macros = { path = "../serviceless-macros", version = "0.6.1" }
+serviceless-macros = { path = "../macros", version = "0.6.1" }
 async-trait = { workspace = true }
 
 [dev-dependencies]
