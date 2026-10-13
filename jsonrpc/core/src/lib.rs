@@ -5,11 +5,74 @@ use std::{
     sync::Arc,
 };
 
+use futures_core::Stream;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::{json, Value};
-use serviceless::{Error as ActorError, Handler, Message, Service, ServiceAddress};
+use serviceless::{
+    Error as ActorError, Handler, Message, RoutedTopic, Service, ServiceAddress, Topic,
+};
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+pub type NotificationStream = Pin<Box<dyn Stream<Item = Value> + Send>>;
+
+/// An actor address that can subscribe to every publication of a topic key.
+pub trait RpcTopicAddress<T: Topic>: Send + Sync {
+    fn subscribe_rpc(&self, topic: T) -> Result<NotificationStream, ActorError>
+    where
+        T::Item: Serialize;
+}
+
+impl<S, T> RpcTopicAddress<T> for ServiceAddress<S>
+where
+    S: Service,
+    T: Topic + RoutedTopic<S>,
+    T::Item: Serialize,
+    ServiceAddress<S>: Send + Sync,
+{
+    fn subscribe_rpc(&self, topic: T) -> Result<NotificationStream, ActorError> {
+        let stream = self.subscribe_all(topic)?;
+        struct Encoded<U>(U);
+        impl<U, I> Stream for Encoded<U>
+        where
+            U: Stream<Item = I> + Unpin,
+            I: Serialize,
+        {
+            type Item = Value;
+            fn poll_next(
+                mut self: Pin<&mut Self>,
+                cx: &mut std::task::Context<'_>,
+            ) -> std::task::Poll<Option<Value>> {
+                Pin::new(&mut self.0)
+                    .poll_next(cx)
+                    .map(|item| item.and_then(|item| serde_json::to_value(item).ok()))
+            }
+        }
+        Ok(Box::pin(Encoded(stream)))
+    }
+}
+
+trait ErasedTopic: Send + Sync {
+    fn subscribe(&self, params: Value) -> Result<NotificationStream, JsonRpcError>;
+}
+
+struct TypedTopic<T, A> {
+    address: A,
+    _topic: PhantomData<fn(T)>,
+}
+
+impl<T, A> ErasedTopic for TypedTopic<T, A>
+where
+    T: Topic + DeserializeOwned,
+    T::Item: Serialize,
+    A: RpcTopicAddress<T> + 'static,
+{
+    fn subscribe(&self, params: Value) -> Result<NotificationStream, JsonRpcError> {
+        let topic = serde_json::from_value(params).map_err(|_| JsonRpcError::invalid_params())?;
+        self.address
+            .subscribe_rpc(topic)
+            .map_err(|_| JsonRpcError::internal())
+    }
+}
 
 /// An actor address capable of handling a particular message type.
 pub trait RpcAddress<M: Message>: Send + Sync {
@@ -155,11 +218,40 @@ fn error_response(error: JsonRpcError, id: Value) -> Value {
 #[derive(Default)]
 pub struct Router {
     methods: HashMap<String, Arc<dyn ErasedMethod>>,
+    topics: HashMap<String, Arc<dyn ErasedTopic>>,
 }
 
 impl Router {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Expose a typed actor topic under an exact event name.
+    pub fn topic<T>(
+        &mut self,
+        name: impl Into<String>,
+        address: impl RpcTopicAddress<T> + 'static,
+    ) -> &mut Self
+    where
+        T: Topic + DeserializeOwned,
+        T::Item: Serialize,
+    {
+        self.topics.insert(
+            name.into(),
+            Arc::new(TypedTopic::<T, _> {
+                address,
+                _topic: PhantomData,
+            }),
+        );
+        self
+    }
+
+    /// Subscribe to a registered topic key. Transport sessions own the returned stream.
+    pub fn subscribe(&self, name: &str, params: Value) -> Result<NotificationStream, JsonRpcError> {
+        self.topics
+            .get(name)
+            .ok_or_else(|| JsonRpcError::new(-32601, "Method not found"))?
+            .subscribe(params)
     }
 
     /// Register a typed actor message returning `Result<R, E>` under an exact method name.

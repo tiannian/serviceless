@@ -5,9 +5,12 @@ use futures_util::{SinkExt, StreamExt};
 use http_body_util::{BodyExt, Full};
 use hyper::{body::Bytes, client::conn, Request, StatusCode};
 use hyper_util::rt::{TokioExecutor, TokioIo};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use serviceless::{service, Context, Handler, Message as ActorMessage, Service};
+use serviceless::{
+    service, Context, Handler, Message as ActorMessage, Metadata, RoutedTopic, Service, Topic,
+    TopicEndpoint,
+};
 use serviceless_jsonrpc::Router;
 use serviceless_jsonrpc_server::Server;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -154,7 +157,8 @@ async fn unix_socket_serves_http() {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_nanos() % 1_000_000
+            .as_nanos()
+            % 1_000_000
     ));
     let listener = tokio::net::UnixListener::bind(&path).unwrap();
     let server_task = tokio::spawn(async move { server.serve_unix(listener).await });
@@ -182,7 +186,8 @@ async fn unix_socket_serves_line_protocol() {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_nanos() % 1_000_000
+            .as_nanos()
+            % 1_000_000
     ));
     let listener = tokio::net::UnixListener::bind(&path).unwrap();
     let server_task = tokio::spawn(async move { server.serve_unix_lines(listener).await });
@@ -230,6 +235,191 @@ async fn line_stream_serves_calls_and_skips_notifications() {
         json!({"jsonrpc":"2.0","result":5,"id":4})
     );
     assert_eq!(output.read_line(&mut line).await.unwrap(), 0);
+    server_task.await.unwrap().unwrap();
+    address.close_service();
+    actor_task.await.unwrap();
+}
+
+#[derive(Clone, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+struct NumberTopic {
+    key: String,
+}
+
+impl Topic for NumberTopic {
+    type Item = i64;
+}
+
+#[derive(Default)]
+struct EventActor {
+    numbers: TopicEndpoint<NumberTopic>,
+}
+
+#[async_trait]
+impl Service for EventActor {
+    type Stream = serviceless::EmptyStream<Self>;
+    type Runtime = serviceless::TokioRuntime;
+    fn metadata(&self) -> Metadata<'_> {
+        Metadata { name: "events" }
+    }
+}
+
+impl RoutedTopic<EventActor> for NumberTopic {
+    fn endpoint(service: &mut EventActor) -> &mut TopicEndpoint<Self> {
+        &mut service.numbers
+    }
+}
+
+#[derive(Serialize)]
+struct Publish {
+    key: String,
+    value: i64,
+}
+impl ActorMessage for Publish {
+    type Result = ();
+}
+
+#[async_trait]
+impl Handler<Publish> for EventActor {
+    async fn handle(&mut self, msg: Publish, ctx: &mut Context<Self>) {
+        ctx.publish_handle()
+            .publish(NumberTopic { key: msg.key }, msg.value)
+            .unwrap();
+    }
+}
+
+fn event_server() -> (
+    Server,
+    serviceless::ServiceAddress<EventActor>,
+    tokio::task::JoinHandle<()>,
+) {
+    let actor = EventActor::default();
+    let (address, run) = Context::new(&actor).run(actor);
+    let task = tokio::spawn(run);
+    let mut router = Router::new();
+    router.topic::<NumberTopic>("number.changed", address.clone());
+    (Server::new(router), address, task)
+}
+
+#[tokio::test]
+async fn websocket_subscribes_and_unsubscribes() {
+    let (server, address, actor_task) = event_server();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_task = tokio::spawn(async move { server.serve_tcp(listener).await });
+    let (mut socket, _) = connect_async(format!("ws://{addr}/")).await.unwrap();
+    socket.send(Message::text(json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"number.changed","params":{"key":"a"}},"id":1}).to_string())).await.unwrap();
+    let reply: Value =
+        serde_json::from_str(socket.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
+    assert_eq!(reply, json!({"jsonrpc":"2.0","result":1,"id":1}));
+    address
+        .send(Publish {
+            key: "a".into(),
+            value: 7,
+        })
+        .unwrap();
+    let event: Value =
+        serde_json::from_str(socket.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
+    assert_eq!(
+        event,
+        json!({"jsonrpc":"2.0","method":"number.changed","params":{"subscription":1,"value":7}})
+    );
+    socket
+        .send(Message::text(
+            json!({"jsonrpc":"2.0","method":"rpc.unsubscribe","params":{"subscription":1},"id":2})
+                .to_string(),
+        ))
+        .await
+        .unwrap();
+    let reply: Value =
+        serde_json::from_str(socket.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
+    assert_eq!(reply, json!({"jsonrpc":"2.0","result":true,"id":2}));
+    socket.close(None).await.unwrap();
+    server_task.abort();
+    address.close_service();
+    actor_task.await.unwrap();
+}
+
+#[tokio::test]
+async fn sse_streams_topic_notifications() {
+    let (server, address, actor_task) = event_server();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_task = tokio::spawn(async move { server.serve_tcp(listener).await });
+    let stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+    let (mut client, connection) = conn::http1::handshake(TokioIo::new(stream)).await.unwrap();
+    tokio::spawn(async move {
+        let _ = connection.await;
+    });
+    let response = client
+        .send_request(
+            Request::get(
+                "http://localhost/events?method=number.changed&params=%7B%22key%22%3A%22a%22%7D",
+            )
+            .body(Full::new(Bytes::new()))
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-type"], "text/event-stream");
+    let mut body = response.into_body();
+    address
+        .send(Publish {
+            key: "a".into(),
+            value: 9,
+        })
+        .unwrap();
+    let frame = tokio::time::timeout(std::time::Duration::from_secs(2), body.frame())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        frame.into_data().unwrap(),
+        Bytes::from_static(
+            b"data: {\"jsonrpc\":\"2.0\",\"method\":\"number.changed\",\"params\":9}\n\n"
+        )
+    );
+    drop(body);
+    server_task.abort();
+    address.close_service();
+    actor_task.await.unwrap();
+}
+
+#[tokio::test]
+async fn line_stream_pushes_topic_notifications() {
+    let (server, address, actor_task) = event_server();
+    let (mut input_writer, input_reader) = tokio::io::duplex(1024);
+    let (output_writer, output_reader) = tokio::io::duplex(1024);
+    let server_task =
+        tokio::spawn(async move { server.serve_stream(input_reader, output_writer).await });
+    input_writer.write_all(format!("{}\n", json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"number.changed","params":{"key":"a"}},"id":1})).as_bytes()).await.unwrap();
+    let mut output = BufReader::new(output_reader);
+    let mut line = String::new();
+    output.read_line(&mut line).await.unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(&line).unwrap(),
+        json!({"jsonrpc":"2.0","result":1,"id":1})
+    );
+    address
+        .send(Publish {
+            key: "a".into(),
+            value: 11,
+        })
+        .unwrap();
+    line.clear();
+    tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        output.read_line(&mut line),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(&line).unwrap(),
+        json!({"jsonrpc":"2.0","method":"number.changed","params":{"subscription":1,"value":11}})
+    );
+    drop(input_writer);
     server_task.await.unwrap().unwrap();
     address.close_service();
     actor_task.await.unwrap();

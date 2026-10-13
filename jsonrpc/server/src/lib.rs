@@ -1,11 +1,11 @@
 //! Network and stream transports for [`serviceless_jsonrpc::Router`].
 
-use std::{convert::Infallible, io, sync::Arc};
+use std::{collections::HashMap, convert::Infallible, io, sync::Arc};
 
 use futures_util::{SinkExt, StreamExt};
-use http_body_util::{BodyExt, Full, Limited};
+use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Full, Limited, StreamBody};
 use hyper::{
-    body::{Bytes, Incoming},
+    body::{Bytes, Frame, Incoming},
     header::CONTENT_TYPE,
     service::service_fn,
     Method, Request, Response, StatusCode, Version,
@@ -18,8 +18,10 @@ use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server::conn::auto,
 };
+use serde_json::{json, Value};
 use serviceless_jsonrpc::Router;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::sync::mpsc;
 use tracing::warn;
 
 const DEFAULT_MAX_MESSAGE_SIZE: usize = 1024 * 1024;
@@ -107,7 +109,15 @@ impl Server {
         }
     }
 
-    async fn handle_http(&self, mut request: Request<Incoming>) -> Response<Full<Bytes>> {
+    async fn handle_http(
+        &self,
+        mut request: Request<Incoming>,
+    ) -> Response<UnsyncBoxBody<Bytes, Infallible>> {
+        if request.method() == Method::GET
+            && request.uri().path() == format!("{}/events", self.path.trim_end_matches('/'))
+        {
+            return self.handle_sse(request.uri().query());
+        }
         if request.uri().path() != self.path.as_ref() {
             return response(StatusCode::NOT_FOUND, Bytes::new());
         }
@@ -123,7 +133,7 @@ impl Server {
                 Ok((response, socket)) => {
                     let server = self.clone();
                     tokio::spawn(async move { server.serve_websocket(socket).await });
-                    return response;
+                    return response.map(|body| body.boxed_unsync());
                 }
                 Err(_) => return response(StatusCode::BAD_REQUEST, Bytes::new()),
             }
@@ -157,14 +167,24 @@ impl Server {
 
     async fn serve_websocket(&self, socket: HyperWebsocket) {
         let Ok(mut socket) = socket.await else { return };
-        while let Some(frame) = socket.next().await {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let mut session = Session::new(self.router.clone(), tx);
+        loop {
+            let frame = tokio::select! {
+                frame = socket.next() => frame,
+                Some(message) = rx.recv() => {
+                    if socket.send(Message::text(message)).await.is_err() { break; }
+                    continue;
+                }
+            };
+            let Some(frame) = frame else { break };
             match frame {
                 Ok(Message::Text(text)) => {
                     if text.len() > self.max_message_size {
                         let _ = socket.close(None).await;
                         break;
                     }
-                    if let Some(result) = self.router.handle_str(text.as_str()).await {
+                    if let Some(result) = session.handle(text.as_str()).await {
                         if socket.send(Message::text(result)).await.is_err() {
                             break;
                         }
@@ -185,20 +205,27 @@ impl Server {
     {
         let mut reader = BufReader::new(reader);
         let mut line = Vec::new();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let mut session = Session::new(self.router.clone(), tx);
         loop {
-            line.clear();
-            if read_line_limited(&mut reader, &mut line, self.max_message_size).await? == 0 {
+            let size = tokio::select! {
+                size = read_line_limited(&mut reader, &mut line, self.max_message_size) => size?,
+                Some(message) = rx.recv() => {
+                    writer.write_all(message.as_bytes()).await?;
+                    writer.write_all(b"\n").await?;
+                    writer.flush().await?;
+                    continue;
+                }
+            };
+            if size == 0 {
                 return Ok(());
             }
-            if let Some(result) = self
-                .router
-                .handle_str(&String::from_utf8_lossy(&line))
-                .await
-            {
+            if let Some(result) = session.handle(&String::from_utf8_lossy(&line)).await {
                 writer.write_all(result.as_bytes()).await?;
                 writer.write_all(b"\n").await?;
                 writer.flush().await?;
             }
+            line.clear();
         }
     }
 
@@ -207,12 +234,180 @@ impl Server {
         self.serve_stream(tokio::io::stdin(), tokio::io::stdout())
             .await
     }
+
+    fn handle_sse(&self, query: Option<&str>) -> Response<UnsyncBoxBody<Bytes, Infallible>> {
+        let Some(query) = query else {
+            return response(StatusCode::BAD_REQUEST, Bytes::new());
+        };
+        let pairs: HashMap<_, _> = query
+            .split('&')
+            .filter_map(|pair| {
+                let (key, value) = pair.split_once('=')?;
+                Some((key, percent_decode(value)?))
+            })
+            .collect();
+        let Some(method) = pairs.get("method") else {
+            return response(StatusCode::BAD_REQUEST, Bytes::new());
+        };
+        let params = match pairs.get("params") {
+            Some(raw) => match serde_json::from_str(raw) {
+                Ok(value) => value,
+                Err(_) => return response(StatusCode::BAD_REQUEST, Bytes::new()),
+            },
+            None => Value::Null,
+        };
+        let stream = match self.router.subscribe(method, params) {
+            Ok(stream) => stream,
+            Err(_) => return response(StatusCode::BAD_REQUEST, Bytes::new()),
+        };
+        let method = method.clone();
+        let stream = stream.map(move |params| {
+            let value = json!({"jsonrpc":"2.0","method":method,"params":params});
+            Ok::<_, Infallible>(Frame::data(Bytes::from(format!("data: {value}\n\n"))))
+        });
+        Response::builder()
+            .status(StatusCode::OK)
+            .header(CONTENT_TYPE, "text/event-stream")
+            .header("cache-control", "no-cache")
+            .body(StreamBody::new(stream).boxed_unsync())
+            .expect("valid SSE response")
+    }
 }
 
-fn response(status: StatusCode, body: Bytes) -> Response<Full<Bytes>> {
+struct Session {
+    router: Arc<Router>,
+    tx: mpsc::UnboundedSender<String>,
+    next_id: u64,
+    subscriptions: HashMap<u64, tokio::task::JoinHandle<()>>,
+}
+
+impl Session {
+    fn new(router: Arc<Router>, tx: mpsc::UnboundedSender<String>) -> Self {
+        Self {
+            router,
+            tx,
+            next_id: 1,
+            subscriptions: HashMap::new(),
+        }
+    }
+
+    async fn handle(&mut self, input: &str) -> Option<String> {
+        let Ok(value) = serde_json::from_str::<Value>(input) else {
+            return self.router.handle_str(input).await;
+        };
+        let Some(method) = value.get("method").and_then(Value::as_str) else {
+            return self
+                .router
+                .handle_value(value)
+                .await
+                .map(|value| value.to_string());
+        };
+        if method != "rpc.subscribe" && method != "rpc.unsubscribe" {
+            return self
+                .router
+                .handle_value(value)
+                .await
+                .map(|value| value.to_string());
+        }
+        let id = value.get("id").cloned()?;
+        if !(id.is_string() || id.is_number() || id.is_null()) {
+            return Some(json!({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request"},"id":null}).to_string());
+        }
+        let result = if value.get("jsonrpc") != Some(&Value::String("2.0".into())) {
+            Err((-32600, "Invalid Request"))
+        } else if !value.get("params").is_some_and(Value::is_object) {
+            Err((-32602, "Invalid params"))
+        } else if method == "rpc.subscribe" {
+            let params = value.get("params").unwrap_or(&Value::Null);
+            match params.get("method").and_then(Value::as_str) {
+                Some(name) => {
+                    let topic_params = params.get("params").cloned().unwrap_or(Value::Null);
+                    match self.router.subscribe(name, topic_params) {
+                        Ok(mut stream) => {
+                            let subscription_id = self.next_id;
+                            self.next_id += 1;
+                            let tx = self.tx.clone();
+                            let name = name.to_owned();
+                            let task = tokio::spawn(async move {
+                                while let Some(params) = stream.next().await {
+                                    let notification = json!({"jsonrpc":"2.0","method":name,"params":{"subscription":subscription_id,"value":params}});
+                                    if tx.send(notification.to_string()).is_err() {
+                                        break;
+                                    }
+                                }
+                            });
+                            self.subscriptions.insert(subscription_id, task);
+                            Ok(json!(subscription_id))
+                        }
+                        Err(error) => Err((
+                            error.code,
+                            if error.code == -32601 {
+                                "Method not found"
+                            } else {
+                                "Invalid params"
+                            },
+                        )),
+                    }
+                }
+                None => Err((-32602, "Invalid params")),
+            }
+        } else {
+            match value
+                .get("params")
+                .and_then(|v| v.get("subscription"))
+                .and_then(Value::as_u64)
+            {
+                Some(subscription_id) => Ok(json!(self
+                    .subscriptions
+                    .remove(&subscription_id)
+                    .is_some_and(|task| {
+                        task.abort();
+                        true
+                    }))),
+                None => Err((-32602, "Invalid params")),
+            }
+        };
+        Some(
+            match result {
+                Ok(result) => json!({"jsonrpc":"2.0","result":result,"id":id}),
+                Err((code, message)) => {
+                    json!({"jsonrpc":"2.0","error":{"code":code,"message":message},"id":id})
+                }
+            }
+            .to_string(),
+        )
+    }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        for (_, task) in self.subscriptions.drain() {
+            task.abort();
+        }
+    }
+}
+
+fn percent_decode(input: &str) -> Option<String> {
+    let mut output = Vec::with_capacity(input.len());
+    let mut bytes = input.bytes();
+    while let Some(byte) = bytes.next() {
+        match byte {
+            b'%' => {
+                let high = (bytes.next()? as char).to_digit(16)?;
+                let low = (bytes.next()? as char).to_digit(16)?;
+                output.push(((high << 4) | low) as u8);
+            }
+            b'+' => output.push(b' '),
+            _ => output.push(byte),
+        }
+    }
+    String::from_utf8(output).ok()
+}
+
+fn response(status: StatusCode, body: Bytes) -> Response<UnsyncBoxBody<Bytes, Infallible>> {
     Response::builder()
         .status(status)
-        .body(Full::new(body))
+        .body(Full::new(body).boxed_unsync())
         .expect("valid response")
 }
 

@@ -108,6 +108,30 @@ let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
 server.serve_tcp(listener).await?;
 ```
 
+### Topic notifications
+
+Register a typed topic with `router.topic::<MyTopic>("topic.changed", address.clone())`.
+`MyTopic` must deserialize from JSON, and its item must serialize to JSON. WebSocket and
+newline-framed stream clients subscribe with a JSON-RPC call:
+
+```json
+{"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"topic.changed","params":{"key":"example"}},"id":1}
+```
+
+The result is a numeric subscription ID scoped to that connection. Each publication sends a
+JSON-RPC notification such as
+`{"jsonrpc":"2.0","method":"topic.changed","params":{"subscription":1,"value":42}}`.
+Call `rpc.unsubscribe` with `{"subscription":1}` to stop it; the result is a boolean. Closing
+the connection drops all its subscriptions. These two `rpc.*` methods are transport session
+methods, so they are available on WebSocket and newline-framed streams, not ordinary HTTP POST.
+
+HTTP clients can open `GET /events?method=topic.changed&params=%7B%22key%22%3A%22example%22%7D`
+(or `/rpc/events` when `with_path("/rpc")` is used). The response is an SSE stream with one
+JSON-RPC notification in each `data:` event. `params` is URL-encoded JSON; omit it for a topic
+whose key deserializes from `null`. Closing the SSE response drops its subscription. SSE is
+one-way, so ordinary calls still use HTTP POST. Events are live only; reconnecting starts a new
+subscription without replay.
+
 On Unix, `serve_unix` serves HTTP and WebSocket over a Unix socket, while `serve_unix_lines`
 serves newline-delimited JSON-RPC directly on the socket. `serve_stdio` uses the same one-JSON-
 document-per-line framing on stdin and stdout. These functions run until the listener or input
