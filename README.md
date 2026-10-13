@@ -110,50 +110,11 @@ server.serve_tcp(listener).await?;
 
 ### Topic notifications
 
-See the [English guide](docs/jsonrpc-notification.md) or
-[中文指南](docs/jsonrpc-notification.zh.md) for the full implementation and subscription flow.
-
-Register a typed topic with `router.topic::<MyTopic>("topic.changed", address.clone())`.
-`MyTopic` must deserialize from JSON, and its item must serialize to JSON. WebSocket and
-newline-framed stream clients subscribe with a JSON-RPC call:
-
-```json
-{"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"topic.changed","params":{"key":"example"}},"id":1}
-```
-
-The result is `true`. Each connection accepts one subscription and each publication sends a
-JSON-RPC notification such as
-`{"jsonrpc":"2.0","method":"topic.changed","params":42}`.
-Closing the connection cancels its subscription. `rpc.subscribe` is a transport session method
-available on WebSocket and newline-framed streams, not ordinary HTTP POST.
-
-HTTP clients can POST `{"method":"topic.changed","params":{"key":"example"}}` to
-`/events` (or `/rpc/events` when `with_path("/rpc")` is used). The response is an SSE stream
-with one JSON-RPC notification in each `data:` event. Omit `params` for a topic whose key
-deserializes from `null`. Closing the SSE response cancels its subscription. Ordinary calls
-still use HTTP POST at `/`. Events are live only; reconnecting starts a new subscription
-without replay.
-
-Run the [topic notification example](jsonrpc/server/examples/topic_notifications.rs) to see one
-producer publish alternating events under the `alice` and `bob` keys:
-
-```bash
-cargo run -p serviceless-jsonrpc-server --example topic_notifications
-```
-
-In separate terminals, open either or both SSE subscriptions:
-
-```bash
-curl -N -X POST -H 'Content-Type: application/json' -d '{"method":"user.updated","params":{"user":"alice"}}' http://127.0.0.1:3000/events
-curl -N -X POST -H 'Content-Type: application/json' -d '{"method":"user.updated","params":{"user":"bob"}}' http://127.0.0.1:3000/events
-```
-
-The same server accepts WebSocket connections at `ws://127.0.0.1:3000/`. Send
-`{"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"user.updated","params":{"user":"alice"}},"id":1}`
-to subscribe there. The result is `true`; subsequent `user.updated`
-notifications contain `sequence` and `message` in `params`. This example
-demonstrates exact-key routing: an `alice` subscriber receives only publications to the
-`alice` topic key.
+See the [English usage guide](docs/jsonrpc-notification.md) or
+[中文用法指南](docs/jsonrpc-notification.zh.md) for HTTP POST + SSE, WebSocket,
+stdio, and newline-framed Unix socket requests. Run the
+[example server](jsonrpc/server/examples/topic_notifications.rs) with
+`cargo run -p serviceless-jsonrpc-server --example topic_notifications`.
 
 On Unix, `serve_unix` serves HTTP and WebSocket over a Unix socket, while `serve_unix_lines`
 serves newline-delimited JSON-RPC directly on the socket. `serve_stdio` uses the same one-JSON-
