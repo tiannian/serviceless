@@ -2,15 +2,14 @@
 
 [中文](topic.zh.md)
 
-A Topic is a typed publish/subscribe key. Its type specifies the key and event item. A `TopicEndpoint<T>` field on the service stores subscribers, and `#[derive(TopicRoutes)]` connects the topic to that field.
+A Topic is a typed publish/subscribe key. The topic type defines the key and event item; a service field stores its subscribers.
 
-## Complete example
+## Define the topic and its storage
+
+Derive `Topic` and declare the item type with `#[topic(item = ...)]`:
 
 ```rust
-use async_trait::async_trait;
-use serviceless::{
-    service, Context, Handler, Message, Service, Topic, TopicEndpoint, TopicRoutes,
-};
+use serviceless::Topic;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct UserReady(String);
@@ -18,6 +17,14 @@ struct UserReady(String);
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Topic)]
 #[topic(item = UserReady)]
 struct UserReadyTopic(String);
+```
+
+A topic key must implement `Ord + Clone + Send + 'static`; its item must implement `Clone + Send + 'static`. Here the `String` inside `UserReadyTopic` identifies an exact key, so subscriptions for different users remain separate.
+
+Add a `TopicEndpoint<T>` field to the service and mark it with `#[topic]`:
+
+```rust
+use serviceless::{service, Service, TopicEndpoint, TopicRoutes};
 
 #[derive(Default, TopicRoutes)]
 struct Worker {
@@ -27,6 +34,17 @@ struct Worker {
 
 #[service]
 impl Service for Worker {}
+```
+
+`TopicRoutes` implements `RoutedTopic<Worker>` for `UserReadyTopic`, pointing to the marked field. The service owns and initializes that field. For a custom runtime, use `RuntimedTopicEndpoint<T, R>` and select the same runtime with `#[service(runtime = "...")]`.
+
+## Publish from a handler
+
+A handler can get a publish handle from its `Context`. This example publishes an event under the `user-42` key:
+
+```rust
+use async_trait::async_trait;
+use serviceless::{Context, Handler, Message};
 
 #[derive(Message)]
 #[message(result = ())]
@@ -36,14 +54,19 @@ struct DoWork;
 impl Handler<DoWork> for Worker {
     async fn handle(&mut self, _message: DoWork, ctx: &mut Context<Self>) {
         ctx.publish_handle()
-            .publish(
-                UserReadyTopic("user-42".into()),
-                UserReady("done".into()),
-            )
+            .publish(UserReadyTopic("user-42".into()), UserReady("done".into()))
             .unwrap();
     }
 }
+```
 
+`publish(topic, item)` enqueues the publication in the service mailbox. Success means it was enqueued; delivery follows mailbox processing order.
+
+## Subscribe and run
+
+`address.subscribe(topic)` returns a future for the next publication of that exact key. Multiple one-time subscribers receive the same publication, then each must subscribe again for a later event:
+
+```rust
 #[tokio::main]
 async fn main() {
     let worker = Worker::default();
@@ -59,13 +82,9 @@ async fn main() {
 }
 ```
 
-`#[derive(Topic)]` with `#[topic(item = EventType)]` generates `Topic::Item`. The topic key must implement `Ord + Clone + Send + 'static`; the event item must implement `Clone + Send + 'static`. Here `UserReadyTopic("user-42")` is an exact key used for both subscription and publication. Different keys have separate subscribers.
+Subscriptions also enter the service mailbox. Calling `subscribe` before sending the message that triggers publication places those operations in order. Subscribers receive only publications after registration; earlier events are not replayed.
 
-Derive `TopicRoutes` on a service struct with named fields, and mark each `TopicEndpoint<T>` field with `#[topic]`. The macro implements `RoutedTopic<Worker>` for `T`, pointing to that field. The service still owns and initializes the field, for example through `Default`. With a custom runtime, use `RuntimedTopicEndpoint<T, R>` and select the same runtime in `#[service(runtime = "...")]`.
-
-## One-time and ongoing subscriptions
-
-`address.subscribe(topic)` returns a future for the next publication of that key. Multiple one-time subscribers to the same key all receive that publication; subscribe again to receive a later one. `address.subscribe_all(topic)` returns a `TopicAllHandle<T>`. Call `recv().await` repeatedly, use it as a Stream, or call `close()` to stop receiving.
+For an ongoing subscription, use `subscribe_all`. Its `TopicAllHandle<T>` supports repeated `recv().await` calls, implements `Stream`, and has a `close()` method:
 
 ```rust,ignore
 let mut events = address.subscribe_all(UserReadyTopic("user-42".into()))?;
@@ -73,7 +92,5 @@ while let Some(event) = events.recv().await {
     println!("{}", event.0);
 }
 ```
-
-Publish with `ctx.publish_handle().publish(topic, item)`. This enqueues the publication in the same service mailbox; success means it was enqueued. Subscriptions also enter that mailbox. Calling `subscribe` or `subscribe_all` before sending the message that triggers publication places those operations in order. A subscriber receives only publications after its registration; topics do not replay earlier events. A publish delivery error generally means the service has stopped.
 
 See the complete [`topic` example](../serviceless/examples/topic.rs). For service and message macros, see the [Service guide](service.md). To expose a topic to JSON-RPC clients, see the [`jsonrpc.topic` guide](jsonrpc-topic.md).
