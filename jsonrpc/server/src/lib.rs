@@ -3,6 +3,7 @@
 mod http;
 mod session;
 mod stream;
+mod subscribe;
 mod websocket;
 
 use std::{convert::Infallible, io, sync::Arc};

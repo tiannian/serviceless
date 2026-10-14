@@ -5,6 +5,8 @@ use serde_json::{json, Value};
 use serviceless_jsonrpc::Router;
 use tokio::sync::mpsc;
 
+use crate::subscribe::{error, subscribe};
+
 pub(super) struct Session {
     router: Arc<Router>,
     tx: mpsc::UnboundedSender<String>,
@@ -38,60 +40,33 @@ impl Session {
                 .await
                 .map(|value| value.to_string());
         }
-        let id = value.get("id").cloned()?;
-        if !(id.is_string() || id.is_number() || id.is_null()) {
-            return Some(json!({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request"},"id":null}).to_string());
+        if !value
+            .get("id")
+            .is_some_and(|id| id.is_string() || id.is_number() || id.is_null())
+        {
+            return value
+                .get("id")
+                .map(|_| error(Value::Null, -32600, "Invalid Request").to_string());
         }
-        let result = if value.get("jsonrpc") != Some(&Value::String("2.0".into())) {
-            Err((-32600, "Invalid Request"))
-        } else if !value.get("params").is_some_and(Value::is_object) {
-            Err((-32602, "Invalid params"))
-        } else {
-            let params = value.get("params").unwrap_or(&Value::Null);
-            match params.get("method").and_then(Value::as_str) {
-                Some(name) => {
-                    if self.subscription.is_some() {
-                        return Some(json!({"jsonrpc":"2.0","error":{"code":-32602,"message":"Already subscribed"},"id":id}).to_string());
-                    }
-                    let topic_params = params.get("params").cloned().unwrap_or(Value::Null);
-                    match self.router.subscribe(name, topic_params) {
-                        Ok(mut stream) => {
-                            let tx = self.tx.clone();
-                            let name = name.to_owned();
-                            let task = tokio::spawn(async move {
-                                while let Some(params) = stream.next().await {
-                                    let notification =
-                                        json!({"jsonrpc":"2.0","method":name,"params":params});
-                                    if tx.send(notification.to_string()).is_err() {
-                                        break;
-                                    }
-                                }
-                            });
-                            self.subscription = Some(task);
-                            Ok(json!(true))
-                        }
-                        Err(error) => Err((
-                            error.code,
-                            if error.code == -32601 {
-                                "Method not found"
-                            } else {
-                                "Invalid params"
-                            },
-                        )),
-                    }
-                }
-                None => Err((-32602, "Invalid params")),
-            }
+        if self.subscription.is_some() {
+            return Some(error(value["id"].clone(), -32602, "Already subscribed").to_string());
+        }
+        let subscription = match subscribe(&self.router, &value) {
+            Ok(subscription) => subscription,
+            Err(error) => return Some(error.to_string()),
         };
-        Some(
-            match result {
-                Ok(result) => json!({"jsonrpc":"2.0","result":result,"id":id}),
-                Err((code, message)) => {
-                    json!({"jsonrpc":"2.0","error":{"code":code,"message":message},"id":id})
+        let tx = self.tx.clone();
+        let name = subscription.name;
+        let mut stream = subscription.stream;
+        self.subscription = Some(tokio::spawn(async move {
+            while let Some(params) = stream.next().await {
+                let event = json!({"jsonrpc":"2.0","method":name,"params":params});
+                if tx.send(event.to_string()).is_err() {
+                    break;
                 }
             }
-            .to_string(),
-        )
+        }));
+        Some(json!({"jsonrpc":"2.0","result":true,"id":subscription.id}).to_string())
     }
 }
 

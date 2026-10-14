@@ -1,10 +1,10 @@
 # `jsonrpc.topic` extension: usage
 
-[中文版](jsonrpc-notification.zh.md)
+[中文版](jsonrpc-topic.zh.md)
 
 ## Protocol scope
 
-`jsonrpc.topic` is this project's topic subscription extension to JSON-RPC 2.0. It uses the no-`id` message form of a JSON-RPC Notification and extends the direction of notification delivery from the client request side to the server response side, so the server can push topic events to subscribers. The [JSON-RPC 2.0 specification](https://www.jsonrpc.org/specification) defines only client-to-server Notifications; server-pushed topic events belong to the `jsonrpc.topic` extension and are not standard JSON-RPC 2.0 Notifications. `jsonrpc.topic` names the extension; the current subscription method on WebSocket and newline streams is `rpc.subscribe`.
+`jsonrpc.topic` is this project's topic subscription extension to JSON-RPC 2.0. It uses the no-`id` message form of a JSON-RPC Notification and extends the direction of notification delivery from the client request side to the server response side, so the server can push topic events to subscribers. The [JSON-RPC 2.0 specification](https://www.jsonrpc.org/specification) defines only client-to-server Notifications; server-pushed topic events belong to the `jsonrpc.topic` extension and are not standard JSON-RPC 2.0 Notifications. `jsonrpc.topic` names the extension; all subscription transports use the `rpc.subscribe` method.
 
 Run the [example server](../jsonrpc/server/examples/topic_notifications.rs) in one terminal:
 
@@ -16,20 +16,23 @@ It listens on `127.0.0.1:3000` and publishes `user.updated` events for `alice` a
 
 ## HTTP POST + SSE
 
-Send one JSON subscription object to `/events`:
+Send one `rpc.subscribe` JSON-RPC request to `/events`:
 
 ```bash
 curl -N -X POST http://127.0.0.1:3000/events \
   -H 'Content-Type: application/json' \
   -d '{
-    "method": "user.updated",
+    "jsonrpc": "2.0",
+    "method": "rpc.subscribe",
     "params": {
-      "user": "alice"
-    }
+      "method": "user.updated",
+      "params": { "user": "alice" }
+    },
+    "id": 1
   }'
 ```
 
-The response has `Content-Type: text/event-stream`. Each `data:` event contains one `jsonrpc.topic` topic event:
+The response has `Content-Type: text/event-stream`. Its first `data:` event is the subscription result `{"jsonrpc":"2.0","result":true,"id":1}`. Subsequent `data:` events contain `jsonrpc.topic` topic events:
 
 ```json
 {
@@ -44,7 +47,7 @@ The response has `Content-Type: text/event-stream`. Each `data:` event contains 
 
 This shows the JSON inside an SSE `data:` event. On the wire, the `data:` line contains the JSON on one line, followed by a blank line.
 
-Stop the request to cancel the subscription. Open a separate POST response for each subscription. If the topic key accepts JSON `null`, `params` may be omitted. A GET request to `/events` returns HTTP 405; invalid subscription data returns HTTP 400.
+Stop the request to cancel the subscription. Open a separate POST response for each subscription. If the topic key accepts JSON `null`, the nested `params.params` may be omitted. A GET request to `/events` returns HTTP 405. If a subscription fails, its only SSE `data:` event contains a JSON-RPC error response with the request `id` when valid, and the stream then ends. Unknown topics use `-32601` and invalid parameters use `-32602`.
 
 Ordinary JSON-RPC calls use POST `/`, not `/events`:
 
@@ -65,10 +68,13 @@ With `Server::with_path("/rpc")`, use `/rpc/events` for SSE and `/rpc` for ordin
 curl --unix-socket /path/to/server.sock -N -X POST http://localhost/events \
   -H 'Content-Type: application/json' \
   -d '{
-    "method": "user.updated",
+    "jsonrpc": "2.0",
+    "method": "rpc.subscribe",
     "params": {
-      "user": "alice"
-    }
+      "method": "user.updated",
+      "params": { "user": "alice" }
+    },
+    "id": 1
   }'
 ```
 
@@ -127,4 +133,4 @@ Each stream session accepts one subscription. Close the stream to cancel. For `s
 
 ## Subscription errors
 
-WebSocket and newline streams return JSON-RPC error `-32601` for an unknown topic name and `-32602` for invalid topic parameters. HTTP SSE returns HTTP 400 for either case. Subscriptions receive new events only; reconnecting starts a new subscription.
+All transports return JSON-RPC error `-32601` for an unknown topic name and `-32602` for invalid topic parameters. SSE sends the error in a `data:` event and ends the stream; WebSocket and newline streams send the error as a message. Malformed JSON uses `-32700`, and an invalid request uses `-32600`. Subscriptions receive new events only; reconnecting starts a new subscription.

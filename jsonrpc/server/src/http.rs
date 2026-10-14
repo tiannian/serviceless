@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 
-use futures_util::StreamExt;
+use futures_util::{stream, StreamExt};
 use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Full, Limited, StreamBody};
 use hyper::{
     body::{Bytes, Frame, Incoming},
@@ -10,6 +10,7 @@ use hyper::{
 use hyper_tungstenite::tungstenite::protocol::WebSocketConfig;
 use serde_json::{json, Value};
 
+use crate::subscribe::{error, subscribe};
 use crate::Server;
 
 impl Server {
@@ -78,22 +79,21 @@ impl Server {
     }
 
     fn handle_sse(&self, body: &[u8]) -> Response<UnsyncBoxBody<Bytes, Infallible>> {
-        let Ok(request) = serde_json::from_slice::<Value>(body) else {
-            return response(StatusCode::BAD_REQUEST, Bytes::new());
+        let request = match serde_json::from_slice::<Value>(body) {
+            Ok(request) => request,
+            Err(_) => return sse_error(error(Value::Null, -32700, "Parse error")),
         };
-        let Some(method) = request.get("method").and_then(Value::as_str) else {
-            return response(StatusCode::BAD_REQUEST, Bytes::new());
+        let subscription = match subscribe(&self.router, &request) {
+            Ok(subscription) => subscription,
+            Err(error) => return sse_error(error),
         };
-        let params = request.get("params").cloned().unwrap_or(Value::Null);
-        let stream = match self.router.subscribe(method, params) {
-            Ok(stream) => stream,
-            Err(_) => return response(StatusCode::BAD_REQUEST, Bytes::new()),
-        };
-        let method = method.to_owned();
-        let stream = stream.map(move |params| {
-            let value = json!({"jsonrpc":"2.0","method":method,"params":params});
-            Ok::<_, Infallible>(Frame::data(Bytes::from(format!("data: {value}\n\n"))))
-        });
+        let reply = json!({"jsonrpc":"2.0","result":true,"id":subscription.id});
+        let first = stream::once(async move { sse_frame(reply) });
+        let name = subscription.name;
+        let events = subscription
+            .stream
+            .map(move |params| sse_frame(json!({"jsonrpc":"2.0","method":name,"params":params})));
+        let stream = first.chain(events);
         Response::builder()
             .status(StatusCode::OK)
             .header(CONTENT_TYPE, "text/event-stream")
@@ -101,6 +101,19 @@ impl Server {
             .body(StreamBody::new(stream).boxed_unsync())
             .expect("valid SSE response")
     }
+}
+
+fn sse_frame(value: Value) -> Result<Frame<Bytes>, Infallible> {
+    Ok(Frame::data(Bytes::from(format!("data: {value}\n\n"))))
+}
+
+fn sse_error(value: Value) -> Response<UnsyncBoxBody<Bytes, Infallible>> {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(CONTENT_TYPE, "text/event-stream")
+        .header("cache-control", "no-cache")
+        .body(Full::new(Bytes::from(format!("data: {value}\n\n"))).boxed_unsync())
+        .expect("valid SSE error response")
 }
 
 fn response(status: StatusCode, body: Bytes) -> Response<UnsyncBoxBody<Bytes, Infallible>> {

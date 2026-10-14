@@ -369,11 +369,50 @@ async fn sse_streams_topic_notifications() {
         .unwrap();
     assert_eq!(get_response.status(), StatusCode::METHOD_NOT_ALLOWED);
     drop(get_response);
+    for (request, code, id) in [
+        (
+            json!({"method":"number.changed","params":{"key":"a"}}),
+            -32600,
+            Value::Null,
+        ),
+        (
+            json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"number.changed"},"id":{}}),
+            -32600,
+            Value::Null,
+        ),
+        (
+            json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"missing"},"id":2}),
+            -32601,
+            json!(2),
+        ),
+        (
+            json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"number.changed","params":{"wrong":"a"}},"id":3}),
+            -32602,
+            json!(3),
+        ),
+    ] {
+        let response = client
+            .send_request(
+                Request::post("http://localhost/events")
+                    .body(Full::new(Bytes::from(request.to_string())))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["content-type"], "text/event-stream");
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let event = std::str::from_utf8(&body).unwrap();
+        let error: Value =
+            serde_json::from_str(event.strip_prefix("data: ").unwrap().trim()).unwrap();
+        assert_eq!(error["error"]["code"], code);
+        assert_eq!(error["id"], id);
+    }
     let response = client
         .send_request(
             Request::post("http://localhost/events")
                 .body(Full::new(Bytes::from(
-                    json!({"method":"number.changed","params":{"key":"a"}}).to_string(),
+                    json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"number.changed","params":{"key":"a"}},"id":1}).to_string(),
                 )))
                 .unwrap(),
         )
@@ -382,6 +421,11 @@ async fn sse_streams_topic_notifications() {
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(response.headers()["content-type"], "text/event-stream");
     let mut body = response.into_body();
+    let reply = body.frame().await.unwrap().unwrap().into_data().unwrap();
+    assert_eq!(
+        reply,
+        Bytes::from_static(b"data: {\"id\":1,\"jsonrpc\":\"2.0\",\"result\":true}\n\n")
+    );
     address
         .send(Publish {
             key: "a".into(),

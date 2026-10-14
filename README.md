@@ -139,8 +139,8 @@ Server-pushed topic events use this project's `jsonrpc.topic` extension. It exte
 no-`id` JSON-RPC Notification form from the client request side to the server response side
 to support topic subscriptions. See the guides for the protocol scope.
 
-See the [English usage guide](docs/jsonrpc-notification.md) or
-[中文用法指南](docs/jsonrpc-notification.zh.md) for HTTP POST + SSE, WebSocket,
+See the [English usage guide](docs/jsonrpc-topic.md) or
+[中文用法指南](docs/jsonrpc-topic.zh.md) for HTTP POST + SSE, WebSocket,
 stdio, and newline-framed Unix socket requests. Run the
 [example server](jsonrpc/server/examples/topic_notifications.rs) with
 `cargo run -p serviceless-jsonrpc-server --example topic_notifications`.
