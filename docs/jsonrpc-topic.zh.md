@@ -14,13 +14,7 @@
 
 区别仅在消息的封装方式：SSE 在同一个 HTTP 响应中依次发送 `data:` 事件；WebSocket 发送独立的文本消息；按行分隔的流每条消息占一行。订阅失败时，服务端返回错误响应，不发送第 2、3 步。
 
-先在一个终端运行[示例服务](../jsonrpc/server/examples/topic_notifications.rs)：
-
-```bash
-cargo run -p serviceless-jsonrpc-server --example topic_notifications
-```
-
-服务监听 `127.0.0.1:3000`，发布 `alice` 和 `bob` 的 `user.updated` 事件。下列调用订阅 Alice 的事件。实际使用时，将 `user.updated` 换成注册的事件名，将 `{"user":"alice"}` 换成对应的 Topic 键。服务端用 `router.topic::<UserTopic>("user.updated", address)` 注册事件。
+下列示例以 `127.0.0.1:3000` 上发布 `alice` 和 `bob` 的 `user.updated` 事件的服务为例。实际使用时，将 `user.updated` 换成注册的事件名，将 `{"user":"alice"}` 换成对应的 Topic 键。
 
 ## HTTP POST + SSE
 

@@ -119,6 +119,9 @@ An `Err(E)` becomes a JSON-RPC error. `JsonRpcError::new(code, message).with_dat
 optional error data. `Err(())` and actor delivery failures become internal errors. Notifications
 never receive an error response.
 
+See the [English JSON-RPC guide](docs/jsonrpc.md) or [中文用法指南](docs/jsonrpc.zh.md)
+for the protocol behavior of calls, notifications, batches, and transports.
+
 ## JSON-RPC server
 
 `serviceless-jsonrpc-server::Server` takes a configured `Router`. Bind a TCP listener and pass it

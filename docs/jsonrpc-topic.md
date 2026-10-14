@@ -14,13 +14,7 @@ Every transport carries the same three JSON-RPC messages in order:
 
 Only the framing differs: SSE puts the response and Notifications in successive `data:` events of one HTTP response; WebSocket sends separate text messages; newline-framed streams send separate lines. A failed subscription returns an error response instead of steps 2 and 3.
 
-Run the [example server](../jsonrpc/server/examples/topic_notifications.rs) in one terminal:
-
-```bash
-cargo run -p serviceless-jsonrpc-server --example topic_notifications
-```
-
-It listens on `127.0.0.1:3000` and publishes `user.updated` events for `alice` and `bob`. The commands below subscribe to Alice's events. Replace `user.updated` with your registered topic name and `{"user":"alice"}` with its topic key. In server code, register a topic with `router.topic::<UserTopic>("user.updated", address)`.
+The examples below use a service at `127.0.0.1:3000` that publishes `user.updated` events for `alice` and `bob`. Replace `user.updated` with your registered topic name and `{"user":"alice"}` with its topic key.
 
 ## HTTP POST + SSE
 
