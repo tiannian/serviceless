@@ -1,0 +1,13 @@
+[package]
+name = "serviceless-dynamic"
+version.workspace = true
+edition = "2021"
+license = "MIT"
+description = "Dynamic library loader for Serviceless services"
+
+[dependencies]
+libloading = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
