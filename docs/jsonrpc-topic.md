@@ -25,8 +25,8 @@ curl -N -X POST http://127.0.0.1:3000/events \
     "jsonrpc": "2.0",
     "method": "rpc.subscribe",
     "params": {
-      "method": "user.updated",
-      "params": { "user": "alice" }
+      "name": "user.updated",
+      "topic": { "user": "alice" }
     },
     "id": 1
   }'
@@ -47,7 +47,7 @@ The response has `Content-Type: text/event-stream`. Its first `data:` event is t
 
 This shows the JSON inside an SSE `data:` event. On the wire, the `data:` line contains the JSON on one line, followed by a blank line.
 
-Stop the request to cancel the subscription. Open a separate POST response for each subscription. If the topic key accepts JSON `null`, the nested `params.params` may be omitted. A GET request to `/events` returns HTTP 405. If a subscription fails, its only SSE `data:` event contains a JSON-RPC error response with the request `id` when valid, and the stream then ends. Unknown topics use `-32601` and invalid parameters use `-32602`.
+Stop the request to cancel the subscription. Open a separate POST response for each subscription. If the topic key accepts JSON `null`, the `params.topic` may be omitted. A GET request to `/events` returns HTTP 405. If a subscription fails, its only SSE `data:` event contains a JSON-RPC error response with the request `id` when valid, and the stream then ends. Unknown topics use `-32601` and invalid parameters use `-32602`.
 
 Ordinary JSON-RPC calls use POST `/`, not `/events`:
 
@@ -71,8 +71,8 @@ curl --unix-socket /path/to/server.sock -N -X POST http://localhost/events \
     "jsonrpc": "2.0",
     "method": "rpc.subscribe",
     "params": {
-      "method": "user.updated",
-      "params": { "user": "alice" }
+      "name": "user.updated",
+      "topic": { "user": "alice" }
     },
     "id": 1
   }'
@@ -91,8 +91,8 @@ websocat ws://127.0.0.1:3000/
   "jsonrpc": "2.0",
   "method": "rpc.subscribe",
   "params": {
-    "method": "user.updated",
-    "params": {
+    "name": "user.updated",
+    "topic": {
       "user": "alice"
     }
   },

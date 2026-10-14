@@ -25,8 +25,8 @@ curl -N -X POST http://127.0.0.1:3000/events \
     "jsonrpc": "2.0",
     "method": "rpc.subscribe",
     "params": {
-      "method": "user.updated",
-      "params": { "user": "alice" }
+      "name": "user.updated",
+      "topic": { "user": "alice" }
     },
     "id": 1
   }'
@@ -47,7 +47,7 @@ curl -N -X POST http://127.0.0.1:3000/events \
 
 上面展示的是 SSE `data:` 事件中的 JSON 内容。实际传输时，`data:` 行中的 JSON 占一行，后面跟一个空行。
 
-关闭请求即取消订阅。每个订阅单独打开一个 POST 响应。如果 Topic 键接受 JSON `null`，可以省略嵌套的 `params.params`。GET `/events` 返回 HTTP 405。订阅失败时，唯一的 SSE `data:` 事件包含 JSON-RPC 错误响应，随后流结束；请求 `id` 有效时会原样返回。未知 Topic 使用 `-32601`，无效参数使用 `-32602`。
+关闭请求即取消订阅。每个订阅单独打开一个 POST 响应。如果 Topic 键接受 JSON `null`，可以省略 `params.topic`。GET `/events` 返回 HTTP 405。订阅失败时，唯一的 SSE `data:` 事件包含 JSON-RPC 错误响应，随后流结束；请求 `id` 有效时会原样返回。未知 Topic 使用 `-32601`，无效参数使用 `-32602`。
 
 普通 JSON-RPC 调用发送到 POST `/`，不发送到 `/events`：
 
@@ -71,8 +71,8 @@ curl --unix-socket /path/to/server.sock -N -X POST http://localhost/events \
     "jsonrpc": "2.0",
     "method": "rpc.subscribe",
     "params": {
-      "method": "user.updated",
-      "params": { "user": "alice" }
+      "name": "user.updated",
+      "topic": { "user": "alice" }
     },
     "id": 1
   }'
@@ -91,8 +91,8 @@ websocat ws://127.0.0.1:3000/
   "jsonrpc": "2.0",
   "method": "rpc.subscribe",
   "params": {
-    "method": "user.updated",
-    "params": {
+    "name": "user.updated",
+    "topic": {
       "user": "alice"
     }
   },

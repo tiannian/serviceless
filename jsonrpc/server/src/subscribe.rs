@@ -29,10 +29,10 @@ pub(super) fn subscribe(router: &Router, request: &Value) -> Result<Subscription
     let Some(params) = request.get("params").and_then(Value::as_object) else {
         return Err(error(id, -32602, "Invalid params"));
     };
-    let Some(name) = params.get("method").and_then(Value::as_str) else {
+    let Some(name) = params.get("name").and_then(Value::as_str) else {
         return Err(error(id, -32602, "Invalid params"));
     };
-    let topic_params = params.get("params").cloned().unwrap_or(Value::Null);
+    let topic_params = params.get("topic").cloned().unwrap_or(Value::Null);
     let stream = router
         .subscribe(name, topic_params)
         .map_err(|error_value| {

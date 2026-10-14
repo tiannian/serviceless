@@ -7,7 +7,7 @@ use serviceless::{service, Context, Handler, Message, Service, Topic, TopicEndpo
 use serviceless_jsonrpc::Router;
 use serviceless_jsonrpc_server::Server;
 
-/// The JSON in `rpc.subscribe.params.params` is deserialized into this topic key.
+/// The JSON in `rpc.subscribe.params.topic` is deserialized into this topic key.
 #[derive(Clone, Deserialize, PartialEq, Eq, PartialOrd, Ord, Topic)]
 #[topic(item = UserEvent)]
 struct UserTopic {

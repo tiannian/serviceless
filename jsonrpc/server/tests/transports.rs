@@ -307,11 +307,11 @@ async fn websocket_allows_one_subscription() {
     let addr = listener.local_addr().unwrap();
     let server_task = tokio::spawn(async move { server.serve_tcp(listener).await });
     let (mut socket, _) = connect_async(format!("ws://{addr}/")).await.unwrap();
-    socket.send(Message::text(json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"number.changed","params":{"key":"a"}},"id":1}).to_string())).await.unwrap();
+    socket.send(Message::text(json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"name":"number.changed","topic":{"key":"a"}},"id":1}).to_string())).await.unwrap();
     let reply: Value =
         serde_json::from_str(socket.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
     assert_eq!(reply, json!({"jsonrpc":"2.0","result":true,"id":1}));
-    socket.send(Message::text(json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"number.changed","params":{"key":"b"}},"id":2}).to_string())).await.unwrap();
+    socket.send(Message::text(json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"name":"number.changed","topic":{"key":"b"}},"id":2}).to_string())).await.unwrap();
     let reply: Value =
         serde_json::from_str(socket.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
     assert_eq!(
@@ -376,17 +376,22 @@ async fn sse_streams_topic_notifications() {
             Value::Null,
         ),
         (
-            json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"number.changed"},"id":{}}),
+            json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"name":"number.changed"},"id":{}}),
             -32600,
             Value::Null,
         ),
         (
-            json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"missing"},"id":2}),
+            json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"name":"missing"},"id":2}),
             -32601,
             json!(2),
         ),
         (
-            json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"number.changed","params":{"wrong":"a"}},"id":3}),
+            json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"topic":{"key":"a"}},"id":4}),
+            -32602,
+            json!(4),
+        ),
+        (
+            json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"name":"number.changed","topic":{"wrong":"a"}},"id":3}),
             -32602,
             json!(3),
         ),
@@ -412,7 +417,7 @@ async fn sse_streams_topic_notifications() {
         .send_request(
             Request::post("http://localhost/events")
                 .body(Full::new(Bytes::from(
-                    json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"number.changed","params":{"key":"a"}},"id":1}).to_string(),
+                    json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"name":"number.changed","topic":{"key":"a"}},"id":1}).to_string(),
                 )))
                 .unwrap(),
         )
@@ -456,7 +461,7 @@ async fn line_stream_pushes_topic_notifications() {
     let (output_writer, output_reader) = tokio::io::duplex(1024);
     let server_task =
         tokio::spawn(async move { server.serve_stream(input_reader, output_writer).await });
-    input_writer.write_all(format!("{}\n", json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"number.changed","params":{"key":"a"}},"id":1})).as_bytes()).await.unwrap();
+    input_writer.write_all(format!("{}\n", json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"name":"number.changed","topic":{"key":"a"}},"id":1})).as_bytes()).await.unwrap();
     let mut output = BufReader::new(output_reader);
     let mut line = String::new();
     output.read_line(&mut line).await.unwrap();
@@ -464,7 +469,7 @@ async fn line_stream_pushes_topic_notifications() {
         serde_json::from_str::<Value>(&line).unwrap(),
         json!({"jsonrpc":"2.0","result":true,"id":1})
     );
-    input_writer.write_all(format!("{}\n", json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"method":"number.changed","params":{"key":"b"}},"id":2})).as_bytes()).await.unwrap();
+    input_writer.write_all(format!("{}\n", json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"name":"number.changed","topic":{"key":"b"}},"id":2})).as_bytes()).await.unwrap();
     line.clear();
     output.read_line(&mut line).await.unwrap();
     assert_eq!(
