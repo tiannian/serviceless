@@ -2,6 +2,8 @@
 
 [English](jsonrpc.md)
 
+`serviceless-jsonrpc` 将 Serviceless 的 Actor 模型直接对接到 JSON-RPC 2.0 协议。注册后的 JSON-RPC 方法通过 Actor 地址调用现有的 Handler：协议中的 `method` 选择 Actor 消息类型，`params` 提供消息数据，Handler 的结果转换为响应。带 `id` 的请求使用 `address.call`，不带 `id` 的 Notification 使用 `address.send`。
+
 ## 方法映射
 
 每个已注册的 JSON-RPC 方法名映射到一种有类型的 Actor 消息。Router 将请求中的 `params` 反序列化为该消息。调用时，Handler 的成功结果转换为 JSON-RPC `result`；Handler 错误转换为 JSON-RPC 错误。

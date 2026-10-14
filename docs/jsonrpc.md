@@ -2,6 +2,8 @@
 
 [中文版](jsonrpc.zh.md)
 
+`serviceless-jsonrpc` directly connects the Serviceless actor model to JSON-RPC 2.0. A registered JSON-RPC method targets an existing actor handler through its address: the protocol's `method` selects the actor message type, `params` supplies the message data, and the handler result becomes the response. A request with `id` uses `address.call`; a notification without `id` uses `address.send`.
+
 ## Method mapping
 
 Each registered JSON-RPC method name maps to one typed actor message. The router deserializes the request's `params` into that message. A call converts the handler's successful result into JSON-RPC `result`; a handler error becomes a JSON-RPC error.
