@@ -1,7 +1,7 @@
 # Dynamic service prototype
 
 `SrvDynLoader` loads a native library with `libloading`. The exported functions
-for `S1` and `Add` are written out in [`examples/flatten-so`](../examples/flatten-so/src/lib.rs)
+for `S1` and `Add` are written out in [`examples/flatten-so`](examples/flatten-so/src/lib.rs)
 as the intended shape of a future `export!` macro. No export macro is implemented yet.
 
 ```sh

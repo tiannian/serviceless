@@ -1,5 +1,5 @@
 [workspace]
-members = ["actor", "tokio", "serviceless", "macros", "jsonrpc/core", "jsonrpc/server", "dynamic", "examples/flatten-so"]
+members = ["actor", "tokio", "serviceless", "macros", "jsonrpc/core", "jsonrpc/server", "dynamic", "dynamic/examples/flatten-so"]
 resolver = "2"
 
 [workspace.package]
