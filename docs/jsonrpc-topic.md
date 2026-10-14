@@ -6,6 +6,14 @@
 
 `jsonrpc.topic` is this project's topic subscription extension to JSON-RPC 2.0. It uses the no-`id` message form of a JSON-RPC Notification and extends the direction of notification delivery from the client request side to the server response side, so the server can push topic events to subscribers. The [JSON-RPC 2.0 specification](https://www.jsonrpc.org/specification) defines only client-to-server Notifications; server-pushed topic events belong to the `jsonrpc.topic` extension and are not standard JSON-RPC 2.0 Notifications. `jsonrpc.topic` names the extension; all subscription transports use the `rpc.subscribe` method.
 
+Every transport carries the same three JSON-RPC messages in order:
+
+1. Client to server: an `rpc.subscribe` request with an `id`, `params.name` (registered topic name), and optional `params.topic` (topic key).
+2. Server to client: a success response with the same `id` and `result: true`.
+3. Server to client: zero or more event Notifications with `method` set to the topic name, `params` set to the event, and no `id`.
+
+Only the framing differs: SSE puts the response and Notifications in successive `data:` events of one HTTP response; WebSocket sends separate text messages; newline-framed streams send separate lines. A failed subscription returns an error response instead of steps 2 and 3.
+
 Run the [example server](../jsonrpc/server/examples/topic_notifications.rs) in one terminal:
 
 ```bash

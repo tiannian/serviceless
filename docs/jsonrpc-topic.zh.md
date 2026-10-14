@@ -6,6 +6,14 @@
 
 `jsonrpc.topic` 是本项目在 JSON-RPC 2.0 基础上定义的 Topic 订阅扩展。它沿用 JSON-RPC Notification 的无 `id` 消息形式，并将通知的发送方向从客户端请求侧扩展到服务端响应侧，以向订阅者推送 Topic 事件。[JSON-RPC 2.0 规范](https://www.jsonrpc.org/specification)只定义了客户端发送给服务端的 Notification；服务端推送的 Topic 事件属于 `jsonrpc.topic` 扩展，不是标准 JSON-RPC 2.0 Notification。`jsonrpc.topic` 是扩展名称；所有订阅传输都使用 `rpc.subscribe` 方法。
 
+所有传输都按顺序承载相同的三类 JSON-RPC 消息：
+
+1. 客户端向服务端发送带 `id` 的 `rpc.subscribe` 请求；`params.name` 是注册的 Topic 名称，`params.topic` 是可选的 Topic 键。
+2. 服务端返回带相同 `id`、`result: true` 的订阅成功响应。
+3. 服务端发送零条或多条事件 Notification：`method` 是 Topic 名称，`params` 是事件内容，没有 `id`。
+
+区别仅在消息的封装方式：SSE 在同一个 HTTP 响应中依次发送 `data:` 事件；WebSocket 发送独立的文本消息；按行分隔的流每条消息占一行。订阅失败时，服务端返回错误响应，不发送第 2、3 步。
+
 先在一个终端运行[示例服务](../jsonrpc/server/examples/topic_notifications.rs)：
 
 ```bash

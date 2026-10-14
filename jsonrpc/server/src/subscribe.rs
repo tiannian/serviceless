@@ -11,6 +11,14 @@ pub(super) fn error(id: Value, code: i32, message: &str) -> Value {
     json!({"jsonrpc":"2.0","error":{"code":code,"message":message},"id":id})
 }
 
+pub(super) fn success(id: Value) -> Value {
+    json!({"jsonrpc":"2.0","result":true,"id":id})
+}
+
+pub(super) fn notification(name: &str, params: Value) -> Value {
+    json!({"jsonrpc":"2.0","method":name,"params":params})
+}
+
 pub(super) fn subscribe(router: &Router, request: &Value) -> Result<Subscription, Value> {
     let valid_id = request
         .get("id")

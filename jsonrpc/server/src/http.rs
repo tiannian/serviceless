@@ -8,9 +8,9 @@ use hyper::{
     Method, Request, Response, StatusCode, Version,
 };
 use hyper_tungstenite::tungstenite::protocol::WebSocketConfig;
-use serde_json::{json, Value};
+use serde_json::Value;
 
-use crate::subscribe::{error, subscribe};
+use crate::subscribe::{notification, subscribe, success};
 use crate::Server;
 
 impl Server {
@@ -71,20 +71,16 @@ impl Server {
     }
 
     fn handle_sse(&self, body: &[u8]) -> Response<UnsyncBoxBody<Bytes, Infallible>> {
-        let request = match serde_json::from_slice::<Value>(body) {
-            Ok(request) => request,
-            Err(_) => return sse_error(error(Value::Null, -32700, "Parse error")),
-        };
+        let request = serde_json::from_slice::<Value>(body).expect("subscription request parsed");
         let subscription = match subscribe(&self.router, &request) {
             Ok(subscription) => subscription,
             Err(error) => return sse_error(error),
         };
-        let reply = json!({"jsonrpc":"2.0","result":true,"id":subscription.id});
-        let first = stream::once(async move { sse_frame(reply) });
+        let first = stream::once(async move { sse_frame(success(subscription.id)) });
         let name = subscription.name;
         let events = subscription
             .stream
-            .map(move |params| sse_frame(json!({"jsonrpc":"2.0","method":name,"params":params})));
+            .map(move |params| sse_frame(notification(&name, params)));
         let stream = first.chain(events);
         Response::builder()
             .status(StatusCode::OK)

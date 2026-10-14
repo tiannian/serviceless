@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use futures_util::StreamExt;
-use serde_json::{json, Value};
+use serde_json::Value;
 use serviceless_jsonrpc::Router;
 use tokio::sync::mpsc;
 
-use crate::subscribe::{error, subscribe};
+use crate::subscribe::{error, notification, subscribe, success};
 
 pub(super) struct Session {
     router: Arc<Router>,
@@ -60,13 +60,13 @@ impl Session {
         let mut stream = subscription.stream;
         self.subscription = Some(tokio::spawn(async move {
             while let Some(params) = stream.next().await {
-                let event = json!({"jsonrpc":"2.0","method":name,"params":params});
+                let event = notification(&name, params);
                 if tx.send(event.to_string()).is_err() {
                     break;
                 }
             }
         }));
-        Some(json!({"jsonrpc":"2.0","result":true,"id":subscription.id}).to_string())
+        Some(success(subscription.id).to_string())
     }
 }
 
