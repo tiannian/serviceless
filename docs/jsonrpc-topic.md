@@ -16,6 +16,16 @@ Only the framing differs: SSE puts the response and Notifications in successive 
 
 The examples below use a service at `127.0.0.1:3000` that publishes `user.updated` events for `alice` and `bob`. Replace `user.updated` with your registered topic name and `{"user":"alice"}` with its topic key.
 
+Register the topic on the same router used for ordinary methods:
+
+```rust,ignore
+let mut router = serviceless_jsonrpc::Router::new();
+router.topic::<UserTopic>("user.updated", address.clone());
+let server = serviceless_jsonrpc_server::Server::new(router);
+```
+
+`UserTopic` is deserialized from `params.topic`; its published item is serialized into the event's `params`.
+
 ## HTTP POST + SSE
 
 Send one `rpc.subscribe` JSON-RPC request to the same endpoint as ordinary calls (`/` by default):

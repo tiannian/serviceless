@@ -6,6 +6,16 @@
 
 每个已注册的 JSON-RPC 方法名映射到一种有类型的 Actor 消息。Router 将请求中的 `params` 反序列化为该消息。调用时，Handler 的成功结果转换为 JSON-RPC `result`；Handler 错误转换为 JSON-RPC 错误。
 
+注册方法并将 Router 交给传输服务：
+
+```rust,ignore
+let mut router = serviceless_jsonrpc::Router::new();
+router.method::<Add>("counter.add", address.clone());
+let server = serviceless_jsonrpc_server::Server::new(router);
+```
+
+其中 `Add` 实现 `Message` 和 `serde::Deserialize`，结果类型是 `Result<R, E>`，且 `R: serde::Serialize`、`E: Into<JsonRpcError>`。
+
 ## 调用与 Notification
 
 带 `id` 的请求通过 `address.call` 调用 Actor，并等待 Handler 的结果：

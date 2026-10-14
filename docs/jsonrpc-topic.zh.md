@@ -16,6 +16,16 @@
 
 下列示例以 `127.0.0.1:3000` 上发布 `alice` 和 `bob` 的 `user.updated` 事件的服务为例。实际使用时，将 `user.updated` 换成注册的事件名，将 `{"user":"alice"}` 换成对应的 Topic 键。
 
+在普通方法使用的同一个 Router 上注册 Topic：
+
+```rust,ignore
+let mut router = serviceless_jsonrpc::Router::new();
+router.topic::<UserTopic>("user.updated", address.clone());
+let server = serviceless_jsonrpc_server::Server::new(router);
+```
+
+`params.topic` 会反序列化为 `UserTopic`；发布的事件内容会序列化到通知的 `params` 中。
+
 ## HTTP POST + SSE
 
 向普通调用使用的同一路径（默认 `/`）发送一份 `rpc.subscribe` JSON-RPC 请求：

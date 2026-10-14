@@ -6,6 +6,16 @@
 
 Each registered JSON-RPC method name maps to one typed actor message. The router deserializes the request's `params` into that message. A call converts the handler's successful result into JSON-RPC `result`; a handler error becomes a JSON-RPC error.
 
+Register a method and pass the router to the transport server:
+
+```rust,ignore
+let mut router = serviceless_jsonrpc::Router::new();
+router.method::<Add>("counter.add", address.clone());
+let server = serviceless_jsonrpc_server::Server::new(router);
+```
+
+Here `Add` implements `Message` and `serde::Deserialize`, and its result is `Result<R, E>` with `R: serde::Serialize` and `E: Into<JsonRpcError>`.
+
 ## Call and notification
 
 A request with an `id` calls the actor through `address.call` and waits for the handler result:
