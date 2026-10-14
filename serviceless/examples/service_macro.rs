@@ -21,11 +21,9 @@ impl Service for NamedService {
     type Stream = EmptyStream<Self>;
 }
 
+#[derive(Message)]
+#[message(result = u32)]
 struct Add(u32);
-
-impl Message for Add {
-    type Result = u32;
-}
 
 #[async_trait]
 impl Handler<Add> for Counter {

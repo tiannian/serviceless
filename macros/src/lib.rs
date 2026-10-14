@@ -3,8 +3,189 @@ use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{format_ident, quote};
 use syn::{
     parse::{Parse, ParseStream},
-    parse_macro_input, parse_quote, Error, Ident, ImplItem, ItemImpl, LitStr, Token, Type,
+    parse_macro_input, parse_quote, Attribute, Data, DeriveInput, Error, Fields, GenericArgument,
+    Ident, ImplItem, ItemImpl, LitStr, PathArguments, Token, Type,
 };
+
+fn facade_path() -> syn::Result<proc_macro2::TokenStream> {
+    match crate_name("serviceless") {
+        Ok(FoundCrate::Itself) => Ok(quote!(::serviceless)),
+        Ok(FoundCrate::Name(name)) => {
+            let ident = format_ident!("{}", name);
+            Ok(quote!(::#ident))
+        }
+        Err(error) => Err(Error::new(
+            proc_macro2::Span::call_site(),
+            format!("cannot find the `serviceless` dependency: {error}"),
+        )),
+    }
+}
+
+struct AssociatedTypeArg {
+    ty: Type,
+}
+
+fn associated_type(attrs: &[Attribute], attr_name: &str, key_name: &str) -> syn::Result<Type> {
+    let mut found = None;
+    for attr in attrs.iter().filter(|attr| attr.path().is_ident(attr_name)) {
+        if found.is_some() {
+            return Err(Error::new_spanned(
+                attr,
+                format!("duplicate `#[{attr_name}]`"),
+            ));
+        }
+        let parsed = attr.parse_args_with(|input: ParseStream<'_>| {
+            let key: Ident = input.parse()?;
+            if key != key_name {
+                return Err(Error::new(key.span(), format!("expected `{key_name}`")));
+            }
+            input.parse::<Token![=]>()?;
+            let ty = input.parse()?;
+            if !input.is_empty() {
+                return Err(input.error("unexpected tokens"));
+            }
+            Ok(AssociatedTypeArg { ty })
+        })?;
+        found = Some(parsed.ty);
+    }
+    found.ok_or_else(|| {
+        Error::new(
+            proc_macro2::Span::call_site(),
+            format!("missing `#[{attr_name}({key_name} = ...)]`"),
+        )
+    })
+}
+
+/// Implement `Message` using `#[message(result = ResultType)]`.
+#[proc_macro_derive(Message, attributes(message))]
+pub fn derive_message(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    match expand_message(&input) {
+        Ok(tokens) => tokens.into(),
+        Err(error) => error.to_compile_error().into(),
+    }
+}
+
+fn expand_message(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
+    let result = associated_type(&input.attrs, "message", "result")?;
+    let facade = facade_path()?;
+    let name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    Ok(quote! {
+        impl #impl_generics #facade::Message for #name #ty_generics #where_clause {
+            type Result = #result;
+        }
+    })
+}
+
+/// Implement `Topic` using `#[topic(item = ItemType)]`.
+#[proc_macro_derive(Topic, attributes(topic))]
+pub fn derive_topic(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    match expand_topic(&input) {
+        Ok(tokens) => tokens.into(),
+        Err(error) => error.to_compile_error().into(),
+    }
+}
+
+fn expand_topic(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
+    let item = associated_type(&input.attrs, "topic", "item")?;
+    let facade = facade_path()?;
+    let name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    Ok(quote! {
+        impl #impl_generics #facade::Topic for #name #ty_generics #where_clause {
+            type Item = #item;
+        }
+    })
+}
+
+/// Route fields marked `#[topic]` to their `TopicEndpoint<T>` topic.
+#[proc_macro_derive(TopicRoutes, attributes(topic))]
+pub fn derive_topic_routes(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    match expand_topic_routes(&input) {
+        Ok(tokens) => tokens.into(),
+        Err(error) => error.to_compile_error().into(),
+    }
+}
+
+fn expand_topic_routes(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
+    let Data::Struct(data) = &input.data else {
+        return Err(Error::new_spanned(input, "TopicRoutes requires a struct"));
+    };
+    let Fields::Named(fields) = &data.fields else {
+        return Err(Error::new_spanned(
+            &data.fields,
+            "TopicRoutes requires named fields",
+        ));
+    };
+    let facade = facade_path()?;
+    let name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let mut routes = Vec::new();
+    for field in &fields.named {
+        let mut topic_attrs = field
+            .attrs
+            .iter()
+            .filter(|attr| attr.path().is_ident("topic"));
+        if let Some(attr) = topic_attrs.next() {
+            if let Some(duplicate) = topic_attrs.next() {
+                return Err(Error::new_spanned(duplicate, "duplicate `#[topic]`"));
+            }
+            if !matches!(attr.meta, syn::Meta::Path(_)) {
+                return Err(Error::new_spanned(attr, "expected `#[topic]`"));
+            }
+            let field_name = field.ident.as_ref().expect("named field");
+            let topic = endpoint_topic(&field.ty)?;
+            routes.push(quote! {
+                impl #impl_generics #facade::RoutedTopic<#name #ty_generics> for #topic #where_clause {
+                    fn endpoint(service: &mut #name #ty_generics)
+                        -> &mut #facade::RuntimedTopicEndpoint<Self, <#name #ty_generics as #facade::Service>::Runtime>
+                    {
+                        &mut service.#field_name
+                    }
+                }
+            });
+        }
+    }
+    if routes.is_empty() {
+        return Err(Error::new_spanned(
+            input,
+            "TopicRoutes requires a `#[topic]` field",
+        ));
+    }
+    Ok(quote!(#(#routes)*))
+}
+
+fn endpoint_topic(ty: &Type) -> syn::Result<&Type> {
+    let Type::Path(path) = ty else {
+        return Err(Error::new_spanned(ty, "expected `TopicEndpoint<T>`"));
+    };
+    let Some(segment) = path.path.segments.last() else {
+        return Err(Error::new_spanned(ty, "expected `TopicEndpoint<T>`"));
+    };
+    let expected_args = match segment.ident.to_string().as_str() {
+        "TopicEndpoint" => 1,
+        "RuntimedTopicEndpoint" => 2,
+        _ => {
+            return Err(Error::new_spanned(
+                ty,
+                "expected `TopicEndpoint<T>` or `RuntimedTopicEndpoint<T, R>`",
+            ))
+        }
+    };
+    let PathArguments::AngleBracketed(args) = &segment.arguments else {
+        return Err(Error::new_spanned(ty, "expected endpoint type arguments"));
+    };
+    if args.args.len() != expected_args {
+        return Err(Error::new_spanned(ty, "unexpected endpoint type arguments"));
+    }
+    match &args.args[0] {
+        GenericArgument::Type(topic) => Ok(topic),
+        _ => Err(Error::new_spanned(ty, "expected a topic type")),
+    }
+}
 
 struct ServiceArgs {
     runtime: Option<Type>,
@@ -103,19 +284,7 @@ fn expand(args: &ServiceArgs, item: &mut ItemImpl) -> syn::Result<proc_macro2::T
         ));
     }
 
-    let facade = match crate_name("serviceless") {
-        Ok(FoundCrate::Itself) => quote!(::serviceless),
-        Ok(FoundCrate::Name(name)) => {
-            let ident = format_ident!("{}", name);
-            quote!(::#ident)
-        }
-        Err(error) => {
-            return Err(Error::new_spanned(
-                &item.self_ty,
-                format!("cannot find the `serviceless` dependency: {error}"),
-            ));
-        }
-    };
+    let facade = facade_path()?;
 
     let runtime = args
         .runtime

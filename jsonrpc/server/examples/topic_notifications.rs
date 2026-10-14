@@ -3,12 +3,13 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serviceless::{service, Context, Handler, Message, RoutedTopic, Service, Topic, TopicEndpoint};
+use serviceless::{service, Context, Handler, Message, Service, Topic, TopicEndpoint, TopicRoutes};
 use serviceless_jsonrpc::Router;
 use serviceless_jsonrpc_server::Server;
 
 /// The JSON in `rpc.subscribe.params.params` is deserialized into this topic key.
-#[derive(Clone, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Deserialize, PartialEq, Eq, PartialOrd, Ord, Topic)]
+#[topic(item = UserEvent)]
 struct UserTopic {
     user: String,
 }
@@ -19,31 +20,20 @@ struct UserEvent {
     message: String,
 }
 
-impl Topic for UserTopic {
-    type Item = UserEvent;
-}
-
-#[derive(Default)]
+#[derive(Default, TopicRoutes)]
 struct Feed {
+    #[topic]
     events: TopicEndpoint<UserTopic>,
 }
 
 #[service]
 impl Service for Feed {}
 
-impl RoutedTopic<Feed> for UserTopic {
-    fn endpoint(service: &mut Feed) -> &mut TopicEndpoint<Self> {
-        &mut service.events
-    }
-}
-
+#[derive(Message)]
+#[message(result = ())]
 struct Publish {
     user: String,
     sequence: u64,
-}
-
-impl Message for Publish {
-    type Result = ();
 }
 
 #[async_trait]

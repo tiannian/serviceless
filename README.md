@@ -61,6 +61,31 @@ explicit `metadata()` method cannot be used together. Handler implementations st
 `#[async_trait]`.
 
 The facade also exports `ReplyHandle`, `TopicEndpoint`, and `TopicAllHandle` aliases for Tokio.
+`Message` and `Topic` can derive their associated types, and `TopicRoutes` generates routing
+from explicitly stored endpoint fields:
+
+```rust,ignore
+#[derive(Message)]
+#[message(result = u32)]
+struct Add(u32);
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Topic)]
+#[topic(item = UserReady)]
+struct UserReadyTopic(String);
+
+#[derive(Default, TopicRoutes)]
+struct MyService {
+    #[topic]
+    user_ready: TopicEndpoint<UserReadyTopic>,
+}
+
+#[service]
+impl Service for MyService {}
+```
+
+`#[topic]` on a field generates `RoutedTopic<MyService>` for the topic named by its
+`TopicEndpoint<T>` type. The endpoint remains an ordinary field, so service construction is
+explicit. `TopicRoutes` also accepts `RuntimedTopicEndpoint<T, R>` for custom runtimes.
 
 More examples are in `serviceless/examples/`. For example:
 
