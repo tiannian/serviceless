@@ -1,6 +1,10 @@
-# JSON-RPC topic notifications: usage
+# `jsonrpc.topic` extension: usage
 
 [中文版](jsonrpc-notification.zh.md)
+
+## Protocol scope
+
+`jsonrpc.topic` is this project's topic subscription extension to JSON-RPC 2.0. It uses the no-`id` message form of a JSON-RPC Notification and extends the direction of notification delivery from the client request side to the server response side, so the server can push topic events to subscribers. The [JSON-RPC 2.0 specification](https://www.jsonrpc.org/specification) defines only client-to-server Notifications; server-pushed topic events belong to the `jsonrpc.topic` extension and are not standard JSON-RPC 2.0 Notifications. `jsonrpc.topic` names the extension; the current subscription method on WebSocket and newline streams is `rpc.subscribe`.
 
 Run the [example server](../jsonrpc/server/examples/topic_notifications.rs) in one terminal:
 
@@ -25,7 +29,7 @@ curl -N -X POST http://127.0.0.1:3000/events \
   }'
 ```
 
-The response has `Content-Type: text/event-stream`. Each `data:` event contains one JSON-RPC notification:
+The response has `Content-Type: text/event-stream`. Each `data:` event contains one `jsonrpc.topic` topic event:
 
 ```json
 {
@@ -100,7 +104,7 @@ Successful reply:
 }
 ```
 
-Subsequent text messages contain notifications:
+Subsequent text messages contain `jsonrpc.topic` topic events:
 
 ```json
 {
@@ -117,9 +121,9 @@ One WebSocket connection accepts one subscription. Close it to cancel. A second 
 
 ## Newline-framed streams
 
-`Server::serve_stdio`, `Server::serve_stream`, and `Server::serve_unix_lines` use the WebSocket JSON messages shown above: the subscription request, its reply, and subsequent notifications. Write each request followed by a newline. Read each reply or notification as one JSON line. The formatted JSON above shows the contents of those lines.
+`Server::serve_stdio`, `Server::serve_stream`, and `Server::serve_unix_lines` use the WebSocket JSON messages shown above: the subscription request, its reply, and subsequent topic events. Write each request followed by a newline. Read each reply or topic event as one JSON line. The formatted JSON above shows the contents of those lines.
 
-Each stream session accepts one subscription. Close the stream to cancel. For `serve_stdio`, write to the process's stdin and read its stdout. For `serve_unix_lines`, connect to the configured Unix socket, for example with `socat - UNIX-CONNECT:/path/to/server.sock`, and send the same newline-terminated JSON. Replies have an `id`; pushed notifications have a `method` and no `id`.
+Each stream session accepts one subscription. Close the stream to cancel. For `serve_stdio`, write to the process's stdin and read its stdout. For `serve_unix_lines`, connect to the configured Unix socket, for example with `socat - UNIX-CONNECT:/path/to/server.sock`, and send the same newline-terminated JSON. Replies have an `id`; pushed topic events have a `method` and no `id`.
 
 ## Subscription errors
 

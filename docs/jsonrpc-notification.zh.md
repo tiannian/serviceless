@@ -1,6 +1,10 @@
-# JSON-RPC Topic 通知用法
+# `jsonrpc.topic` 扩展用法
 
 [English](jsonrpc-notification.md)
+
+## 协议范围
+
+`jsonrpc.topic` 是本项目在 JSON-RPC 2.0 基础上定义的 Topic 订阅扩展。它沿用 JSON-RPC Notification 的无 `id` 消息形式，并将通知的发送方向从客户端请求侧扩展到服务端响应侧，以向订阅者推送 Topic 事件。[JSON-RPC 2.0 规范](https://www.jsonrpc.org/specification)只定义了客户端发送给服务端的 Notification；服务端推送的 Topic 事件属于 `jsonrpc.topic` 扩展，不是标准 JSON-RPC 2.0 Notification。`jsonrpc.topic` 是扩展名称；当前 WebSocket 和按行流使用 `rpc.subscribe` 方法发起订阅。
 
 先在一个终端运行[示例服务](../jsonrpc/server/examples/topic_notifications.rs)：
 
@@ -25,7 +29,7 @@ curl -N -X POST http://127.0.0.1:3000/events \
   }'
 ```
 
-响应的 `Content-Type` 是 `text/event-stream`。每个 `data:` 事件包含一条 JSON-RPC 通知：
+响应的 `Content-Type` 是 `text/event-stream`。每个 `data:` 事件包含一条 `jsonrpc.topic` Topic 事件：
 
 ```json
 {
@@ -100,7 +104,7 @@ websocat ws://127.0.0.1:3000/
 }
 ```
 
-之后收到的文本通知：
+之后收到的 `jsonrpc.topic` Topic 事件：
 
 ```json
 {
@@ -117,9 +121,9 @@ websocat ws://127.0.0.1:3000/
 
 ## 按行分隔的流
 
-`Server::serve_stdio`、`Server::serve_stream` 和 `Server::serve_unix_lines` 使用上面 WebSocket 部分展示的 JSON 消息：订阅请求、成功响应和后续通知。每条请求末尾加换行符；每条响应或通知占一行。上面的多行 JSON 展示了各行的内容。
+`Server::serve_stdio`、`Server::serve_stream` 和 `Server::serve_unix_lines` 使用上面 WebSocket 部分展示的 JSON 消息：订阅请求、成功响应和后续 Topic 事件。每条请求末尾加换行符；每条响应或 Topic 事件占一行。上面的多行 JSON 展示了各行的内容。
 
-每个流会话只接受一个订阅，关闭流即取消。`serve_stdio` 从进程 stdin 接收请求、向 stdout 写响应；`serve_unix_lines` 可用 `socat - UNIX-CONNECT:/path/to/server.sock` 连接配置的 Unix socket，再发送同样的换行分隔 JSON。响应有 `id`，推送通知有 `method` 且没有 `id`。
+每个流会话只接受一个订阅，关闭流即取消。`serve_stdio` 从进程 stdin 接收请求、向 stdout 写响应；`serve_unix_lines` 可用 `socat - UNIX-CONNECT:/path/to/server.sock` 连接配置的 Unix socket，再发送同样的换行分隔 JSON。响应有 `id`，推送的 Topic 事件有 `method` 且没有 `id`。
 
 ## 订阅错误
 

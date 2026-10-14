@@ -1,7 +1,7 @@
 # Serviceless
 
 Serviceless is a small async actor library for Rust. A service processes typed messages through
-one mailbox, supports async handlers and lifecycle hooks, and can publish topic notifications.
+one mailbox, supports async handlers and lifecycle hooks, and can publish topic events.
 
 ## Crates
 
@@ -133,7 +133,11 @@ let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
 server.serve_tcp(listener).await?;
 ```
 
-### Topic notifications
+### `jsonrpc.topic` extension
+
+Server-pushed topic events use this project's `jsonrpc.topic` extension. It extends the
+no-`id` JSON-RPC Notification form from the client request side to the server response side
+to support topic subscriptions. See the guides for the protocol scope.
 
 See the [English usage guide](docs/jsonrpc-notification.md) or
 [中文用法指南](docs/jsonrpc-notification.zh.md) for HTTP POST + SSE, WebSocket,
