@@ -16,10 +16,10 @@ It listens on `127.0.0.1:3000` and publishes `user.updated` events for `alice` a
 
 ## HTTP POST + SSE
 
-Send one `rpc.subscribe` JSON-RPC request to `/events`:
+Send one `rpc.subscribe` JSON-RPC request to the same endpoint as ordinary calls (`/` by default):
 
 ```bash
-curl -N -X POST http://127.0.0.1:3000/events \
+curl -N -X POST http://127.0.0.1:3000/ \
   -H 'Content-Type: application/json' \
   -d '{
     "jsonrpc": "2.0",
@@ -47,9 +47,9 @@ The response has `Content-Type: text/event-stream`. Its first `data:` event is t
 
 This shows the JSON inside an SSE `data:` event. On the wire, the `data:` line contains the JSON on one line, followed by a blank line.
 
-Stop the request to cancel the subscription. Open a separate POST response for each subscription. If the topic key accepts JSON `null`, the `params.topic` may be omitted. A GET request to `/events` returns HTTP 405. If a subscription fails, its only SSE `data:` event contains a JSON-RPC error response with the request `id` when valid, and the stream then ends. Unknown topics use `-32601` and invalid parameters use `-32602`.
+Stop the request to cancel the subscription. Open a separate POST response for each subscription. If the topic key accepts JSON `null`, the `params.topic` may be omitted. A GET request to `/` returns HTTP 405. If a subscription fails, its only SSE `data:` event contains a JSON-RPC error response with the request `id` when valid, and the stream then ends. Unknown topics use `-32601` and invalid parameters use `-32602`.
 
-Ordinary JSON-RPC calls use POST `/`, not `/events`:
+Ordinary JSON-RPC calls also use POST `/`:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/ \
@@ -62,10 +62,10 @@ curl -X POST http://127.0.0.1:3000/ \
   }'
 ```
 
-With `Server::with_path("/rpc")`, use `/rpc/events` for SSE and `/rpc` for ordinary calls. The same paths work over HTTP/1.1 and HTTP/2. With `Server::serve_unix`, send the HTTP request through the configured Unix socket:
+With `Server::with_path("/rpc")`, both SSE subscriptions and ordinary calls use `/rpc`. The same path works over HTTP/1.1 and HTTP/2. With `Server::serve_unix`, send the HTTP request through the configured Unix socket:
 
 ```bash
-curl --unix-socket /path/to/server.sock -N -X POST http://localhost/events \
+curl --unix-socket /path/to/server.sock -N -X POST http://localhost/ \
   -H 'Content-Type: application/json' \
   -d '{
     "jsonrpc": "2.0",

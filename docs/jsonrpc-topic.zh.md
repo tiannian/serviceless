@@ -16,10 +16,10 @@ cargo run -p serviceless-jsonrpc-server --example topic_notifications
 
 ## HTTP POST + SSE
 
-向 `/events` 发送一份 `rpc.subscribe` JSON-RPC 请求：
+向普通调用使用的同一路径（默认 `/`）发送一份 `rpc.subscribe` JSON-RPC 请求：
 
 ```bash
-curl -N -X POST http://127.0.0.1:3000/events \
+curl -N -X POST http://127.0.0.1:3000/ \
   -H 'Content-Type: application/json' \
   -d '{
     "jsonrpc": "2.0",
@@ -47,9 +47,9 @@ curl -N -X POST http://127.0.0.1:3000/events \
 
 上面展示的是 SSE `data:` 事件中的 JSON 内容。实际传输时，`data:` 行中的 JSON 占一行，后面跟一个空行。
 
-关闭请求即取消订阅。每个订阅单独打开一个 POST 响应。如果 Topic 键接受 JSON `null`，可以省略 `params.topic`。GET `/events` 返回 HTTP 405。订阅失败时，唯一的 SSE `data:` 事件包含 JSON-RPC 错误响应，随后流结束；请求 `id` 有效时会原样返回。未知 Topic 使用 `-32601`，无效参数使用 `-32602`。
+关闭请求即取消订阅。每个订阅单独打开一个 POST 响应。如果 Topic 键接受 JSON `null`，可以省略 `params.topic`。GET `/` 返回 HTTP 405。订阅失败时，唯一的 SSE `data:` 事件包含 JSON-RPC 错误响应，随后流结束；请求 `id` 有效时会原样返回。未知 Topic 使用 `-32601`，无效参数使用 `-32602`。
 
-普通 JSON-RPC 调用发送到 POST `/`，不发送到 `/events`：
+普通 JSON-RPC 调用也发送到 POST `/`：
 
 ```bash
 curl -X POST http://127.0.0.1:3000/ \
@@ -62,10 +62,10 @@ curl -X POST http://127.0.0.1:3000/ \
   }'
 ```
 
-使用 `Server::with_path("/rpc")` 时，SSE 路径是 `/rpc/events`，普通调用路径是 `/rpc`。HTTP/1.1 与 HTTP/2 使用相同的路径。使用 `Server::serve_unix` 时，可通过配置的 Unix socket 发送 HTTP 请求：
+使用 `Server::with_path("/rpc")` 时，SSE 订阅和普通调用都使用 `/rpc`。HTTP/1.1 与 HTTP/2 使用相同的路径。使用 `Server::serve_unix` 时，可通过配置的 Unix socket 发送 HTTP 请求：
 
 ```bash
-curl --unix-socket /path/to/server.sock -N -X POST http://localhost/events \
+curl --unix-socket /path/to/server.sock -N -X POST http://localhost/ \
   -H 'Content-Type: application/json' \
   -d '{
     "jsonrpc": "2.0",

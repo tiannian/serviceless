@@ -361,7 +361,7 @@ async fn sse_streams_topic_notifications() {
     });
     let get_response = client
         .send_request(
-            Request::get("http://localhost/events")
+            Request::get("http://localhost/")
                 .body(Full::new(Bytes::new()))
                 .unwrap(),
         )
@@ -369,11 +369,23 @@ async fn sse_streams_topic_notifications() {
         .unwrap();
     assert_eq!(get_response.status(), StatusCode::METHOD_NOT_ALLOWED);
     drop(get_response);
+    let old_endpoint = client
+        .send_request(
+            Request::post("http://localhost/events")
+                .body(Full::new(Bytes::from_static(
+                    b"{\"jsonrpc\":\"2.0\",\"method\":\"rpc.subscribe\",\"id\":1}",
+                )))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(old_endpoint.status(), StatusCode::NOT_FOUND);
+    drop(old_endpoint);
     for (request, code, id) in [
         (
-            json!({"method":"number.changed","params":{"key":"a"}}),
+            json!({"method":"rpc.subscribe","params":{"name":"number.changed","topic":{"key":"a"}},"id":1}),
             -32600,
-            Value::Null,
+            json!(1),
         ),
         (
             json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"name":"number.changed"},"id":{}}),
@@ -398,7 +410,7 @@ async fn sse_streams_topic_notifications() {
     ] {
         let response = client
             .send_request(
-                Request::post("http://localhost/events")
+                Request::post("http://localhost/")
                     .body(Full::new(Bytes::from(request.to_string())))
                     .unwrap(),
             )
@@ -415,7 +427,7 @@ async fn sse_streams_topic_notifications() {
     }
     let response = client
         .send_request(
-            Request::post("http://localhost/events")
+            Request::post("http://localhost/")
                 .body(Full::new(Bytes::from(
                     json!({"jsonrpc":"2.0","method":"rpc.subscribe","params":{"name":"number.changed","topic":{"key":"a"}},"id":1}).to_string(),
                 )))

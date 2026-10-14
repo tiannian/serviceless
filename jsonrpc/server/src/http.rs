@@ -18,19 +18,6 @@ impl Server {
         &self,
         mut request: Request<Incoming>,
     ) -> Response<UnsyncBoxBody<Bytes, Infallible>> {
-        if request.uri().path() == format!("{}/events", self.path.trim_end_matches('/')) {
-            if request.method() != Method::POST {
-                return response(StatusCode::METHOD_NOT_ALLOWED, Bytes::new());
-            }
-            let body = match Limited::new(request.into_body(), self.max_message_size)
-                .collect()
-                .await
-            {
-                Ok(body) => body.to_bytes(),
-                Err(_) => return response(StatusCode::PAYLOAD_TOO_LARGE, Bytes::new()),
-            };
-            return self.handle_sse(&body);
-        }
         if request.uri().path() != self.path.as_ref() {
             return response(StatusCode::NOT_FOUND, Bytes::new());
         }
@@ -63,6 +50,11 @@ impl Server {
             Ok(body) => body.to_bytes(),
             Err(_) => return response(StatusCode::PAYLOAD_TOO_LARGE, Bytes::new()),
         };
+        if serde_json::from_slice::<Value>(&body)
+            .is_ok_and(|value| value.get("method").and_then(Value::as_str) == Some("rpc.subscribe"))
+        {
+            return self.handle_sse(&body);
+        }
         let Some(result) = self
             .router
             .handle_str(&String::from_utf8_lossy(&body))
