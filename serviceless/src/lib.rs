@@ -4,7 +4,7 @@ extern crate self as serviceless;
 
 pub use serviceless_actor::RuntimedService as Service;
 pub use serviceless_actor::*;
-pub use serviceless_macros::service;
+pub use serviceless_macros::{service, Message, Topic, TopicRoutes};
 pub use serviceless_tokio::TokioRuntime;
 
 #[doc(hidden)]

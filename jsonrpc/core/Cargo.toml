@@ -1,0 +1,16 @@
+[package]
+name = "serviceless-jsonrpc"
+version.workspace = true
+edition = "2021"
+description = "Transport-independent JSON-RPC 2.0 router for Serviceless actors"
+license = "MIT"
+
+[dependencies]
+serviceless = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+futures-core = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }
+async-trait = { workspace = true }

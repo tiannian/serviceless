@@ -1,44 +1,27 @@
 use async_trait::async_trait;
 use serviceless::{
-    Context, Handler, Metadata, RoutedTopic, Service, ServiceAddress, Topic, TopicEndpoint,
+    service, Context, Handler, Message, Service, ServiceAddress, Topic, TopicEndpoint, TopicRoutes,
 };
 
 #[derive(Clone)]
 pub struct UserReady(pub String);
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Topic)]
+#[topic(item = UserReady)]
 pub struct UserReadyTopic(pub String);
 
-impl Topic for UserReadyTopic {
-    type Item = UserReady;
-}
-
-#[derive(Default)]
+#[derive(Default, TopicRoutes)]
 pub struct MyService {
+    #[topic]
     pub user_ready: TopicEndpoint<UserReadyTopic>,
 }
 
-#[async_trait]
-impl Service for MyService {
-    type Stream = serviceless::EmptyStream<Self>;
-    type Runtime = serviceless::TokioRuntime;
+#[service(name = "my_service")]
+impl Service for MyService {}
 
-    fn metadata(&self) -> Metadata<'_> {
-        Metadata { name: "my_service" }
-    }
-}
-
-impl RoutedTopic<MyService> for UserReadyTopic {
-    fn endpoint(service: &mut MyService) -> &mut TopicEndpoint<Self> {
-        &mut service.user_ready
-    }
-}
-
+#[derive(Message)]
+#[message(result = ())]
 pub struct DoWork;
-
-impl serviceless::Message for DoWork {
-    type Result = ();
-}
 
 #[async_trait]
 impl Handler<DoWork> for MyService {

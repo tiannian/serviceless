@@ -1,5 +1,6 @@
 use serviceless::{
-    runtime::Runtime, service, Context, EmptyStream, Envelope, Metadata, Service, TokioRuntime,
+    runtime::Runtime, service, Context, EmptyStream, Envelope, Message, Metadata, RoutedTopic,
+    RuntimedTopicEndpoint, Service, TokioRuntime, Topic, TopicRoutes,
 };
 use std::marker::PhantomData;
 
@@ -83,6 +84,23 @@ impl Service for CustomMetadata {
     async fn started(&mut self, _ctx: &mut Context<Self>) {}
 }
 
+#[derive(Message)]
+#[message(result = T)]
+struct GenericMessage<T>(T);
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Topic)]
+#[topic(item = u32)]
+struct NumberTopic(u32);
+
+#[derive(Default, TopicRoutes)]
+struct RoutedService {
+    #[topic]
+    numbers: RuntimedTopicEndpoint<NumberTopic, SelectedRuntime>,
+}
+
+#[service(runtime = "SelectedRuntime")]
+impl Service for RoutedService {}
+
 fn assert_tokio_service<T: Service<Runtime = TokioRuntime>>() {}
 
 #[test]
@@ -103,4 +121,16 @@ fn options_and_explicit_members_are_preserved() {
     assert_tokio_service::<CustomMetadata>();
     assert_eq!(ConfiguredService.metadata().name, "configured");
     assert_eq!(CustomMetadata.metadata().name, "custom");
+}
+
+#[test]
+fn derived_message_topic_and_route_keep_explicit_storage() {
+    fn assert_result<M: Message<Result = u32>>() {}
+    fn assert_item<T: Topic<Item = u32>>() {}
+    assert_result::<GenericMessage<u32>>();
+    assert_item::<NumberTopic>();
+
+    let mut service = RoutedService::default();
+    let _: &mut RuntimedTopicEndpoint<NumberTopic, SelectedRuntime> =
+        NumberTopic::endpoint(&mut service);
 }

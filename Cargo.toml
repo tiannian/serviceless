@@ -1,5 +1,5 @@
 [workspace]
-members = ["actor", "tokio", "serviceless", "macros"]
+members = ["actor", "tokio", "serviceless", "macros", "jsonrpc/core", "jsonrpc/server"]
 resolver = "2"
 
 [workspace.package]
@@ -9,6 +9,7 @@ version = "0.7.0"
 serviceless-actor = { path = "actor", version = "0.7.0" }
 serviceless-tokio = { path = "tokio", version = "0.7.0" }
 serviceless-macros = { path = "macros", version = "0.7.0" }
+serviceless = { path = "serviceless", version = "0.7.0" }
 async-trait = "0.1.80"
 tracing = "0.1.44"
 thiserror = "2.0.17"
@@ -16,3 +17,9 @@ futures-core = "0.3"
 futures-util = "0.3"
 tokio = { version = "1.37.0", default-features = false }
 prometheus-client = "0.25.0"
+proc-macro-crate = "3.5"
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
