@@ -37,22 +37,167 @@ serviceless::export!(
 
 导出函数采用 C ABI。消息和结果由使用者保证在宿主与动态库两侧定义一致、具有 C 兼容布局。第一版还要求它们是 `Copy`，且不包含需要跨库释放的资源。`repr(C)` 本身不能使 `String`、`Vec` 等 Rust 所有权类型适合直接跨库传递。当前原型以 `unsafe trait DynamicMessage` 表达这项由使用者承担的约束。
 
+## 完整的手写展开示例
+
+下面是当前 `flatten-so` 中完整的单消息版本。Service 与消息定义由使用者编写；实例管理和 `init`、`destroy`、`send`、`call` 入口展示了宏将来需要生成的代码。当前原型只实现独立运行时；共享运行时配置在 `init` 中被拒绝。
+
+```rust
+//! Hand-written output of a future `export!(S1, messages = [Add])` macro.
+use std::{
+    ffi::c_void,
+    sync::{Arc, Condvar, Mutex},
+};
+
+use async_trait::async_trait;
+use serviceless::{
+    runtime::OneshotReceiver, service, Context, Handler, Message, Service, ServiceAddress,
+};
+use serviceless_dynamic::{Config, DynamicMessage, Failure, Success};
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct Add {
+    pub amount: u64,
+}
+
+impl Message for Add {
+    type Result = u64;
+}
+unsafe impl DynamicMessage for Add {
+    type Result = u64;
+    const NAME: &'static str = "Add";
+}
+
+struct S1 {
+    count: u64,
+}
+
+#[service(name = "S1")]
+impl Service for S1 {}
+
+#[async_trait]
+impl Handler<Add> for S1 {
+    async fn handle(&mut self, message: Add, _ctx: &mut Context<Self>) -> u64 {
+        self.count += message.amount;
+        self.count
+    }
+}
+
+struct Instance {
+    address: ServiceAddress<S1>,
+    task: tokio::task::JoinHandle<()>,
+    runtime: Option<tokio::runtime::Runtime>,
+    calls: Arc<(Mutex<usize>, Condvar)>,
+}
+
+#[no_mangle]
+pub extern "C" fn __serviceless_S1_init(cfg: Config) -> *mut c_void {
+    let result = std::panic::catch_unwind(|| {
+        if cfg.isolated_runtime == 0 {
+            return None;
+        }
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .ok()?;
+        let service = S1 { count: 0 };
+        let (address, run) = Context::new(&service).run(service);
+        let task = runtime.spawn(run);
+        Some(Box::into_raw(Box::new(Mutex::new(Instance {
+            address,
+            task,
+            runtime: Some(runtime),
+            calls: Arc::new((Mutex::new(0), Condvar::new())),
+        }))) as *mut c_void)
+    });
+    result.ok().flatten().unwrap_or(std::ptr::null_mut())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn __serviceless_S1_destroy(instance: *mut c_void) {
+    if instance.is_null() {
+        return;
+    }
+    let instance = Box::from_raw(instance as *mut Mutex<Instance>);
+    let (calls, runtime) = {
+        let mut guard = instance.lock().unwrap();
+        guard.address.close_service();
+        (guard.calls.clone(), guard.runtime.take())
+    };
+    let (count, done) = &*calls;
+    let mut active = count.lock().unwrap();
+    while *active != 0 {
+        active = done.wait(active).unwrap();
+    }
+    drop(active);
+    let guard = instance.lock().unwrap();
+    guard.task.abort();
+    drop(guard);
+    if let Some(runtime) = runtime {
+        runtime.shutdown_background();
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn __serviceless_S1_send_Add(instance: *mut c_void, message: Add) -> i32 {
+    if instance.is_null() {
+        return -1;
+    }
+    let guard = match (*(instance as *const Mutex<Instance>)).lock() {
+        Ok(g) => g,
+        Err(_) => return -2,
+    };
+    match guard.address.send(message) {
+        Ok(()) => 0,
+        Err(_) => -3,
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn __serviceless_S1_call_Add(
+    instance: *mut c_void,
+    message: Add,
+    context: *mut c_void,
+    success: Success<u64>,
+    failed: Failure,
+) -> i32 {
+    if instance.is_null() || context.is_null() {
+        return -1;
+    }
+    let (receiver, handle, calls) = {
+        let guard = match (*(instance as *const Mutex<Instance>)).lock() {
+            Ok(g) => g,
+            Err(_) => return -2,
+        };
+        let receiver = match guard.address.call_raw(message) {
+            Ok(r) => r,
+            Err(_) => return -3,
+        };
+        let handle = guard.runtime.as_ref().unwrap().handle().clone();
+        let calls = guard.calls.clone();
+        *calls.0.lock().unwrap() += 1;
+        (receiver, handle, calls)
+    };
+    let context_addr = context as usize;
+    handle.spawn(async move {
+        match receiver.recv().await {
+            Ok(value) => success(context_addr as *mut c_void, &value),
+            Err(_) => failed(context_addr as *mut c_void, -3),
+        }
+        let mut active = calls.0.lock().unwrap();
+        *active -= 1;
+        if *active == 0 {
+            calls.1.notify_all();
+        }
+    });
+    0
+}
+```
+
 ## 消息入口与回调
 
-`send_M` 接收实例指针和消息值，将消息提交到 Service 邮箱。返回 `0` 表示提交成功；非零值表示错误。`call_M` 使用现有的 `ServiceAddress::call_raw` 取得结果接收端，然后异步等待处理结果：
-
-```rust,ignore
-type CallbackSuccess<R> = unsafe extern "C" fn(ctx: *mut c_void, result: *const R);
-type CallbackFailed = unsafe extern "C" fn(ctx: *mut c_void, code: i32);
-
-unsafe extern "C" fn call_M(
-    instance: *mut c_void,
-    message: M,
-    ctx: *mut c_void,
-    success: CallbackSuccess<M::Result>,
-    failed: CallbackFailed,
-) -> i32;
-```
+`send_M` 接收实例指针和消息值，将消息提交到 Service 邮箱。返回 `0` 表示提交成功；非零值表示错误。`call_M` 使用现有的 `ServiceAddress::call_raw` 取得结果接收端，然后异步等待处理结果。完整代码中的 `Success<R>` 和 `Failure` 是回调函数类型。
 
 这里的 `ctx` 是加载器传入的回调上下文，与 Service 实例指针分别管理。`call_M` 返回 `0` 表示已接受调用：动态库取得回调上下文的所有权，之后必须恰好调用一次 `success` 或 `failed`。立即返回非零值表示调用未被接受，此时不得触发回调，加载器负责回收上下文。
 
