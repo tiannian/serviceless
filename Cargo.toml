@@ -4,6 +4,8 @@ resolver = "2"
 
 [workspace.package]
 version = "0.7.0"
+edition = "2021"
+license = "MIT"
 
 [workspace.dependencies]
 serviceless-actor = { path = "actor", version = "0.7.0" }

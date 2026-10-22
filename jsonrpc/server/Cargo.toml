@@ -1,9 +1,9 @@
 [package]
 name = "serviceless-jsonrpc-server"
 version.workspace = true
-edition = "2021"
+edition.workspace = true
 description = "HTTP, WebSocket, Unix socket, and stdio transports for Serviceless JSON-RPC"
-license = "MIT"
+license.workspace = true
 
 [dependencies]
 serviceless-jsonrpc = { path = "../core", version = "0.7.0" }

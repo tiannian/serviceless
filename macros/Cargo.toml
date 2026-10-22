@@ -1,9 +1,9 @@
 [package]
 name = "serviceless-macros"
 version.workspace = true
-edition = "2021"
+edition.workspace = true
 description = "Procedural macros for serviceless"
-license = "MIT"
+license.workspace = true
 
 [lib]
 proc-macro = true

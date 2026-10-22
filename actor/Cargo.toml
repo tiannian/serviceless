@@ -1,9 +1,9 @@
 [package]
 name = "serviceless-actor"
 version.workspace = true
-edition = "2021"
+edition.workspace = true
 description = "An simple actor model in rust, like actix"
-license = "MIT"
+license.workspace = true
 readme = "../README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

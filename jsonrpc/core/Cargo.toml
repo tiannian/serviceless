@@ -1,9 +1,9 @@
 [package]
 name = "serviceless-jsonrpc"
 version.workspace = true
-edition = "2021"
+edition.workspace = true
 description = "Transport-independent JSON-RPC 2.0 router for Serviceless actors"
-license = "MIT"
+license.workspace = true
 
 [dependencies]
 serviceless = { workspace = true }

@@ -1,9 +1,9 @@
 [package]
 name = "serviceless"
 version.workspace = true
-edition = "2021"
+edition.workspace = true
 description = "Async actor library with a Tokio runtime"
-license = "MIT"
+license.workspace = true
 readme = "../README.md"
 
 [dependencies]
