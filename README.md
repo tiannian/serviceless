@@ -152,4 +152,4 @@ serves newline-delimited JSON-RPC directly on the socket. `serve_stdio` uses the
 document-per-line framing on stdin and stdout. These functions run until the listener or input
 closes; the caller owns shutdown and Unix socket path cleanup.
 
-Stream and stdio are available by default. Enable Cargo features `tcp`, `unix`, or `unixlines` for `serve_tcp`, `serve_unix`, or `serve_unix_lines`, respectively. Unix sockets require a Unix platform. For example: `serviceless-jsonrpc-server = { version = "0.7.1", features = ["tcp"] }`.
+Stream and stdio are available by default. Enable Cargo features `tcp`, `unix`, or `unixlines` for `serve_tcp`, `serve_unix`, or `serve_unix_lines`, respectively. Unix sockets require a Unix platform. For example: `serviceless-jsonrpc-server = { version = "0.7.2", features = ["tcp"] }`.

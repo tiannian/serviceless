@@ -65,4 +65,4 @@ HTTP POST 和 WebSocket 默认使用 `/`，也可以使用配置的端点路径�
 
 服务端推送的 Topic 事件和订阅参见 [`jsonrpc.topic` 指南](jsonrpc-topic.zh.md)。
 
-默认提供 stream 和 stdio。启用 Cargo feature `tcp`、`unix`、`unixlines` 可分别使用 `serve_tcp`、`serve_unix`、`serve_unix_lines`；Unix socket 仅支持 Unix 平台。例如：`serviceless-jsonrpc-server = { version = "0.7.1", features = ["tcp"] }`。
+默认提供 stream 和 stdio。启用 Cargo feature `tcp`、`unix`、`unixlines` 可分别使用 `serve_tcp`、`serve_unix`、`serve_unix_lines`；Unix socket 仅支持 Unix 平台。例如：`serviceless-jsonrpc-server = { version = "0.7.2", features = ["tcp"] }`。

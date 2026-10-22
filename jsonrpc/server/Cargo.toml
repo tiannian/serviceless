@@ -15,7 +15,7 @@ unix = ["dep:hyper", "dep:hyper-util", "dep:hyper-tungstenite", "dep:http-body-u
 unixlines = ["tokio/net", "dep:tracing"]
 
 [dependencies]
-serviceless-jsonrpc = { path = "../core", version = "0.7.1" }
+serviceless-jsonrpc = { path = "../core", version = "0.7.2" }
 hyper = { version = "1", optional = true, features = ["server", "http1", "http2"] }
 hyper-util = { version = "0.1", optional = true, features = ["server-auto", "tokio"] }
 hyper-tungstenite = { version = "0.20", optional = true }

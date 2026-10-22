@@ -1,3 +1,5 @@
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! Network and stream transports for [`serviceless_jsonrpc::Router`].
 
 #[cfg(any(feature = "tcp", all(unix, feature = "unix")))]
@@ -55,6 +57,7 @@ impl Server {
 
     /// Change the HTTP and WebSocket endpoint path.
     #[cfg(any(feature = "tcp", all(unix, feature = "unix")))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "tcp", all(unix, feature = "unix")))))]
     pub fn with_path(mut self, path: impl Into<Arc<str>>) -> Self {
         self.path = path.into();
         self
@@ -68,6 +71,7 @@ impl Server {
 
     /// Accept HTTP/1.1, cleartext HTTP/2, and HTTP/1.1 WebSocket on a TCP listener.
     #[cfg(feature = "tcp")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "tcp")))]
     pub async fn serve_tcp(&self, listener: tokio::net::TcpListener) -> io::Result<()> {
         loop {
             let (stream, _) = listener.accept().await?;
@@ -79,6 +83,7 @@ impl Server {
     /// Accept HTTP/1.1, cleartext HTTP/2, and HTTP/1.1 WebSocket on a Unix listener.
     /// The caller owns the socket path and its cleanup.
     #[cfg(all(unix, feature = "unix"))]
+    #[cfg_attr(docsrs, doc(cfg(all(unix, feature = "unix"))))]
     pub async fn serve_unix(&self, listener: tokio::net::UnixListener) -> io::Result<()> {
         loop {
             let (stream, _) = listener.accept().await?;
@@ -89,6 +94,7 @@ impl Server {
 
     /// Accept newline-delimited JSON-RPC directly on a Unix listener.
     #[cfg(all(unix, feature = "unixlines"))]
+    #[cfg_attr(docsrs, doc(cfg(all(unix, feature = "unixlines"))))]
     pub async fn serve_unix_lines(&self, listener: tokio::net::UnixListener) -> io::Result<()> {
         loop {
             let (stream, _) = listener.accept().await?;

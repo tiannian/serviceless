@@ -79,4 +79,4 @@ notifications for Alice. Change the topic's `user` to `bob` for Bob's updates.
 See the [protocol guide](../../../docs/jsonrpc.md) and
 [topic guide](../../../docs/jsonrpc-topic.md) for more details.
 
-Stream and stdio are available by default. Enable Cargo features `tcp`, `unix`, or `unixlines` for `serve_tcp`, `serve_unix`, or `serve_unix_lines`, respectively. Unix sockets require a Unix platform. For example: `serviceless-jsonrpc-server = { version = "0.7.1", features = ["tcp"] }`.
+Stream and stdio are available by default. Enable Cargo features `tcp`, `unix`, or `unixlines` for `serve_tcp`, `serve_unix`, or `serve_unix_lines`, respectively. Unix sockets require a Unix platform. For example: `serviceless-jsonrpc-server = { version = "0.7.2", features = ["tcp"] }`.
