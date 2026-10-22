@@ -64,3 +64,5 @@ The response contains only the second entry. For a counter starting at zero, it 
 HTTP POST and WebSocket use `/` by default, or a configured endpoint path. Send a call or notification in the POST body. HTTP returns JSON for a call and status 204 with an empty body for a notification. WebSocket accepts one JSON document per text message; newline streams accept one JSON document per line. Neither sends a message for a notification. The same JSON-RPC behavior applies over TCP, Unix sockets, and standard input/output where those transports are available.
 
 For server-pushed topic events and subscriptions, see the [`jsonrpc.topic` guide](jsonrpc-topic.md).
+
+Stream and stdio are available by default. Enable Cargo features `tcp`, `unix`, or `unixlines` for `serve_tcp`, `serve_unix`, or `serve_unix_lines`, respectively. Unix sockets require a Unix platform. For example: `serviceless-jsonrpc-server = { version = "0.7.0", features = ["tcp"] }`.

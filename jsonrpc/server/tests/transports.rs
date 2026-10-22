@@ -1,10 +1,16 @@
 use std::convert::Infallible;
 
 use async_trait::async_trait;
+#[cfg(feature = "tcp")]
 use futures_util::{SinkExt, StreamExt};
+#[cfg(any(feature = "tcp", all(unix, feature = "unix")))]
 use http_body_util::{BodyExt, Full};
+#[cfg(any(feature = "tcp", all(unix, feature = "unix")))]
 use hyper::{body::Bytes, client::conn, Request, StatusCode};
-use hyper_util::rt::{TokioExecutor, TokioIo};
+#[cfg(feature = "tcp")]
+use hyper_util::rt::TokioExecutor;
+#[cfg(any(feature = "tcp", all(unix, feature = "unix")))]
+use hyper_util::rt::TokioIo;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use serviceless::{
@@ -14,6 +20,7 @@ use serviceless::{
 use serviceless_jsonrpc::Router;
 use serviceless_jsonrpc_server::Server;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+#[cfg(feature = "tcp")]
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 struct Counter(i64);
@@ -55,6 +62,7 @@ fn request(amount: i64, id: i64) -> String {
     json!({"jsonrpc":"2.0","method":"add","params":{"amount":amount},"id":id}).to_string()
 }
 
+#[cfg(any(feature = "tcp", all(unix, feature = "unix")))]
 async fn http1_request<I>(io: I, amount: i64) -> (StatusCode, String)
 where
     I: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
@@ -76,6 +84,7 @@ where
     (status, String::from_utf8(body.to_vec()).unwrap())
 }
 
+#[cfg(feature = "tcp")]
 #[tokio::test]
 async fn tcp_serves_http1_http2_and_websocket() {
     let (server, address, actor_task) = server();
@@ -147,7 +156,7 @@ async fn tcp_serves_http1_http2_and_websocket() {
     actor_task.await.unwrap();
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "unix"))]
 #[tokio::test]
 async fn unix_socket_serves_http() {
     let (server, address, actor_task) = server();
@@ -176,7 +185,7 @@ async fn unix_socket_serves_http() {
     std::fs::remove_file(path).unwrap();
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "unixlines"))]
 #[tokio::test]
 async fn unix_socket_serves_line_protocol() {
     let (server, address, actor_task) = server();
@@ -300,6 +309,7 @@ fn event_server() -> (
     (Server::new(router), address, task)
 }
 
+#[cfg(feature = "tcp")]
 #[tokio::test]
 async fn websocket_allows_one_subscription() {
     let (server, address, actor_task) = event_server();
@@ -348,6 +358,7 @@ async fn websocket_allows_one_subscription() {
     actor_task.await.unwrap();
 }
 
+#[cfg(feature = "tcp")]
 #[tokio::test]
 async fn sse_streams_topic_notifications() {
     let (server, address, actor_task) = event_server();

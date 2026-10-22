@@ -1,4 +1,4 @@
-//! Stateful JSON-RPC methods over HTTP/WebSocket (default) or stdio.
+//! Stateful JSON-RPC methods over stdio or HTTP/WebSocket (requires tcp).
 //! See README.md in this directory for requests and expected responses.
 
 use async_trait::async_trait;
@@ -45,7 +45,14 @@ impl Handler<Get> for Counter {
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    let transport = std::env::args().nth(1).unwrap_or_else(|| "http".into());
+    let transport = std::env::args().nth(1).unwrap_or_else(|| {
+        if cfg!(feature = "tcp") {
+            "http"
+        } else {
+            "stdio"
+        }
+        .into()
+    });
     if !matches!(transport.as_str(), "http" | "stdio") {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
@@ -65,9 +72,19 @@ async fn main() -> std::io::Result<()> {
         // Keep stdout exclusively for JSON-RPC responses.
         server.serve_stdio().await
     } else {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
-        eprintln!("JSON-RPC HTTP/WebSocket listening on 127.0.0.1:3000");
-        server.serve_tcp(listener).await
+        #[cfg(feature = "tcp")]
+        {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
+            eprintln!("JSON-RPC HTTP/WebSocket listening on 127.0.0.1:3000");
+            server.serve_tcp(listener).await
+        }
+        #[cfg(not(feature = "tcp"))]
+        {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "HTTP requires the tcp feature",
+            ))
+        }
     };
     address.close_service();
     actor.await?;

@@ -6,7 +6,7 @@ HTTP and WebSocket connections to the counter server share the same actor.
 ## Counter over HTTP
 
 ```sh
-cargo run -p serviceless-jsonrpc-server --example counter
+cargo run -p serviceless-jsonrpc-server --features tcp --example counter
 ```
 
 In another terminal, call the actor:
@@ -40,7 +40,7 @@ Unknown methods return -32601; invalid message parameters return -32602.
 Keep the counter HTTP server running and start the client in another terminal:
 
 ```sh
-cargo run -p serviceless-jsonrpc-server --example websocket_client
+cargo run -p serviceless-jsonrpc-server --features tcp --example websocket_client
 ```
 
 The client sends a notification followed by a batch containing an add and a get.
@@ -64,7 +64,7 @@ The server exits when stdin reaches EOF.
 Stop the counter server before starting the topic server on the same port:
 
 ```sh
-cargo run -p serviceless-jsonrpc-server --example topic_notifications
+cargo run -p serviceless-jsonrpc-server --features tcp --example topic_notifications
 ```
 
 Subscribe to Alice's updates in another terminal:
@@ -78,3 +78,5 @@ The SSE stream first acknowledges the subscription, then delivers `user.updated`
 notifications for Alice. Change the topic's `user` to `bob` for Bob's updates.
 See the [protocol guide](../../../docs/jsonrpc.md) and
 [topic guide](../../../docs/jsonrpc-topic.md) for more details.
+
+Stream and stdio are available by default. Enable Cargo features `tcp`, `unix`, or `unixlines` for `serve_tcp`, `serve_unix`, or `serve_unix_lines`, respectively. Unix sockets require a Unix platform. For example: `serviceless-jsonrpc-server = { version = "0.7.0", features = ["tcp"] }`.

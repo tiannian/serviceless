@@ -64,3 +64,5 @@ JSON 数组中的条目按输入顺序处理。响应汇总为数组，Notificat
 HTTP POST 和 WebSocket 默认使用 `/`，也可以使用配置的端点路径。调用或 Notification 都放在 POST 请求体中；HTTP 对调用返回 JSON，对 Notification 返回 204 和空响应体。WebSocket 每条文本消息承载一份 JSON 文档；按行分隔的流每行承载一份 JSON 文档。Notification 在这两种传输中也不产生响应消息。在支持的传输方式中，TCP、Unix socket 和标准输入输出遵循相同的 JSON-RPC 行为。
 
 服务端推送的 Topic 事件和订阅参见 [`jsonrpc.topic` 指南](jsonrpc-topic.zh.md)。
+
+默认提供 stream 和 stdio。启用 Cargo feature `tcp`、`unix`、`unixlines` 可分别使用 `serve_tcp`、`serve_unix`、`serve_unix_lines`；Unix socket 仅支持 Unix 平台。例如：`serviceless-jsonrpc-server = { version = "0.7.0", features = ["tcp"] }`。

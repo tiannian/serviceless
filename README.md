@@ -145,9 +145,11 @@ See the [English usage guide](docs/jsonrpc-topic.md) or
 [中文用法指南](docs/jsonrpc-topic.zh.md) for HTTP POST + SSE, WebSocket,
 stdio, and newline-framed Unix socket requests. Run the
 [example server](jsonrpc/server/examples/topic_notifications.rs) with
-`cargo run -p serviceless-jsonrpc-server --example topic_notifications`.
+`cargo run -p serviceless-jsonrpc-server --features tcp --example topic_notifications`.
 
 On Unix, `serve_unix` serves HTTP and WebSocket over a Unix socket, while `serve_unix_lines`
 serves newline-delimited JSON-RPC directly on the socket. `serve_stdio` uses the same one-JSON-
 document-per-line framing on stdin and stdout. These functions run until the listener or input
 closes; the caller owns shutdown and Unix socket path cleanup.
+
+Stream and stdio are available by default. Enable Cargo features `tcp`, `unix`, or `unixlines` for `serve_tcp`, `serve_unix`, or `serve_unix_lines`, respectively. Unix sockets require a Unix platform. For example: `serviceless-jsonrpc-server = { version = "0.7.0", features = ["tcp"] }`.
