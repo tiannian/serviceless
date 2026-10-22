@@ -65,4 +65,4 @@ HTTP POST and WebSocket use `/` by default, or a configured endpoint path. Send 
 
 For server-pushed topic events and subscriptions, see the [`jsonrpc.topic` guide](jsonrpc-topic.md).
 
-Stream and stdio are available by default. Enable Cargo features `tcp`, `unix`, or `unixlines` for `serve_tcp`, `serve_unix`, or `serve_unix_lines`, respectively. Unix sockets require a Unix platform. For example: `serviceless-jsonrpc-server = { version = "0.7.0", features = ["tcp"] }`.
+Stream and stdio are available by default. Enable Cargo features `tcp`, `unix`, or `unixlines` for `serve_tcp`, `serve_unix`, or `serve_unix_lines`, respectively. Unix sockets require a Unix platform. For example: `serviceless-jsonrpc-server = { version = "0.7.1", features = ["tcp"] }`.
