@@ -28,10 +28,9 @@ struct Counter(u32);
 impl Service for Counter {
 }
 
+#[derive(Message)]
+#[message(result = u32)]
 struct Add(u32);
-impl Message for Add {
-    type Result = u32;
-}
 
 #[async_trait]
 impl Handler<Add> for Counter {
