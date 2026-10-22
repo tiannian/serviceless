@@ -1,5 +1,6 @@
 [package]
 name = "serviceless-tokio"
+description = "Tokio runtime integration for Serviceless actors"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

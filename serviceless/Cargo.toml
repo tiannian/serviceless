@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 description = "Async actor library with a Tokio runtime"
 license.workspace = true
-readme = "../README.md"
+readme = "README.md"
 
 [dependencies]
 serviceless-actor = { workspace = true }
