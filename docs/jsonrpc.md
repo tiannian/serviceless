@@ -18,6 +18,15 @@ let server = serviceless_jsonrpc_server::Server::new(router);
 
 Here `Add` implements `Message` and `serde::Deserialize`, and its result is `Result<R, E>` with `R: serde::Serialize` and `E: Into<JsonRpcError>`.
 
+Configure typed parameter decoding, handler result encoding, and topic events with
+`Router::new().with_config(serviceless_jsonrpc::Config::default().set_bytes_hex().enable_hex_prefix())`.
+`Router::new()` and `Router::default()` use `serde_json_ext::Config::default()`.
+The configuration applies to all registered methods and topics. Byte fields must use
+`#[serde(with = "serde_bytes")]` (or an equivalent bytes serializer) for byte encoding options.
+JSON-RPC envelopes and prebuilt `serde_json::Value` values retain their JSON representation.
+Custom `RpcResult` or `RpcTopicAddress` implementations should override their
+`*_with_config` method to support the router configuration.
+
 ## Call and notification
 
 A request with an `id` calls the actor through `address.call` and waits for the handler result:

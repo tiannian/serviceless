@@ -216,3 +216,66 @@ async fn method_converts_handler_errors_and_preserves_error_data() {
     task.await.unwrap();
 }
 use std::convert::Infallible;
+
+#[derive(serde::Serialize, Deserialize)]
+struct EchoBytes {
+    #[serde(with = "serde_bytes")]
+    data: Vec<u8>,
+}
+
+impl Message for EchoBytes {
+    type Result = Result<Self, Infallible>;
+}
+
+#[async_trait]
+impl Handler<EchoBytes> for Counter {
+    async fn handle(
+        &mut self,
+        msg: EchoBytes,
+        _: &mut Context<Self>,
+    ) -> Result<EchoBytes, Infallible> {
+        Ok(msg)
+    }
+}
+
+#[tokio::test]
+async fn router_config_controls_typed_bytes_for_values_text_and_notifications() {
+    let counter = Counter(0);
+    let (address, run) = Context::new(&counter).run(counter);
+    let task = tokio::spawn(run);
+    for (config, encoded) in [
+        (None, json!([0, 255])),
+        (
+            Some(
+                serviceless_jsonrpc::Config::default()
+                    .set_bytes_hex()
+                    .enable_hex_prefix(),
+            ),
+            json!("0x00ff"),
+        ),
+        (
+            Some(serviceless_jsonrpc::Config::default().set_bytes_base64()),
+            json!("AP8="),
+        ),
+    ] {
+        let mut router = Router::new();
+        router.method::<EchoBytes>("echo", address.clone());
+        // Configuration also applies to previously registered methods.
+        if let Some(config) = config {
+            router = router.with_config(config);
+        }
+        let request = json!({"jsonrpc":"2.0","method":"echo","params":{"data":encoded},"id":1});
+        let expected = json!({"jsonrpc":"2.0","result":{"data":encoded},"id":1});
+        assert_eq!(
+            router.handle_value(request.clone()).await,
+            Some(expected.clone())
+        );
+        let text = router.handle_str(&request.to_string()).await.unwrap();
+        assert_eq!(serde_json::from_str::<Value>(&text).unwrap(), expected);
+        let mut notification = request;
+        notification.as_object_mut().unwrap().remove("id");
+        assert_eq!(router.handle_value(notification).await, None);
+    }
+    address.close_service();
+    task.await.unwrap();
+}

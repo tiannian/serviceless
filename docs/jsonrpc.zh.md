@@ -18,6 +18,14 @@ let server = serviceless_jsonrpc_server::Server::new(router);
 
 其中 `Add` 实现 `Message` 和 `serde::Deserialize`，结果类型是 `Result<R, E>`，且 `R: serde::Serialize`、`E: Into<JsonRpcError>`。
 
+通过 `Router::new().with_config(serviceless_jsonrpc::Config::default().set_bytes_hex().enable_hex_prefix())`
+配置参数反序列化、Handler 返回值和 Topic 事件的序列化。
+`Router::new()` 和 `Router::default()` 使用 `serde_json_ext::Config::default()`，
+配置对所有已注册的方法和 Topic 生效。字节字段需使用 `#[serde(with = "serde_bytes")]`
+或等效的字节序列化实现，才能应用字节编码选项。
+JSON-RPC 协议外层和预先构造的 `serde_json::Value` 保持原有 JSON 表示。
+自定义 `RpcResult` 或 `RpcTopicAddress` 实现应覆盖对应的 `*_with_config` 方法以支持 Router 配置。
+
 ## 调用与 Notification
 
 带 `id` 的请求通过 `address.call` 调用 Actor，并等待 Handler 的结果：

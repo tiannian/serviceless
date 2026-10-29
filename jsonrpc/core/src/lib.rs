@@ -8,6 +8,7 @@ use std::{
 use futures_core::Stream;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::{json, Value};
+pub use serde_json_ext::Config;
 use serviceless::{
     Error as ActorError, Handler, Message, RoutedTopic, Service, ServiceAddress, Topic,
 };
@@ -17,6 +18,17 @@ pub type NotificationStream = Pin<Box<dyn Stream<Item = Value> + Send>>;
 
 /// An actor address that can subscribe to every publication of a topic key.
 pub trait RpcTopicAddress<T: Topic>: Send + Sync {
+    fn subscribe_rpc_with_config(
+        &self,
+        topic: T,
+        _config: &Config,
+    ) -> Result<NotificationStream, ActorError>
+    where
+        T::Item: Serialize,
+    {
+        self.subscribe_rpc(topic)
+    }
+
     fn subscribe_rpc(&self, topic: T) -> Result<NotificationStream, ActorError>
     where
         T::Item: Serialize;
@@ -30,8 +42,16 @@ where
     ServiceAddress<S>: Send + Sync,
 {
     fn subscribe_rpc(&self, topic: T) -> Result<NotificationStream, ActorError> {
+        self.subscribe_rpc_with_config(topic, &Config::default())
+    }
+
+    fn subscribe_rpc_with_config(
+        &self,
+        topic: T,
+        config: &Config,
+    ) -> Result<NotificationStream, ActorError> {
         let stream = self.subscribe_all(topic)?;
-        struct Encoded<U>(U);
+        struct Encoded<U>(U, Config);
         impl<U, I> Stream for Encoded<U>
         where
             U: Stream<Item = I> + Unpin,
@@ -44,15 +64,16 @@ where
             ) -> std::task::Poll<Option<Value>> {
                 Pin::new(&mut self.0)
                     .poll_next(cx)
-                    .map(|item| item.and_then(|item| serde_json::to_value(item).ok()))
+                    .map(|item| item.and_then(|item| serde_json_ext::to_value(&item, &self.1).ok()))
             }
         }
-        Ok(Box::pin(Encoded(stream)))
+        Ok(Box::pin(Encoded(stream, config.clone())))
     }
 }
 
 trait ErasedTopic: Send + Sync {
-    fn subscribe(&self, params: Value) -> Result<NotificationStream, JsonRpcError>;
+    fn subscribe(&self, params: Value, config: &Config)
+        -> Result<NotificationStream, JsonRpcError>;
 }
 
 struct TypedTopic<T, A> {
@@ -66,10 +87,15 @@ where
     T::Item: Serialize,
     A: RpcTopicAddress<T> + 'static,
 {
-    fn subscribe(&self, params: Value) -> Result<NotificationStream, JsonRpcError> {
-        let topic = serde_json::from_value(params).map_err(|_| JsonRpcError::invalid_params())?;
+    fn subscribe(
+        &self,
+        params: Value,
+        config: &Config,
+    ) -> Result<NotificationStream, JsonRpcError> {
+        let topic = serde_json_ext::from_value(params, config)
+            .map_err(|_| JsonRpcError::invalid_params())?;
         self.address
-            .subscribe_rpc(topic)
+            .subscribe_rpc_with_config(topic, config)
             .map_err(|_| JsonRpcError::internal())
     }
 }
@@ -97,11 +123,12 @@ where
 }
 
 trait ErasedMethod: Send + Sync {
-    fn invoke(
-        &self,
+    fn invoke<'a>(
+        &'a self,
         params: Value,
         notification: bool,
-    ) -> BoxFuture<'_, Result<Option<Value>, JsonRpcError>>;
+        config: &'a Config,
+    ) -> BoxFuture<'a, Result<Option<Value>, JsonRpcError>>;
 }
 
 struct TypedMethod<M, A> {
@@ -115,14 +142,15 @@ where
     M::Result: RpcResult + Send,
     A: RpcAddress<M> + 'static,
 {
-    fn invoke(
-        &self,
+    fn invoke<'a>(
+        &'a self,
         params: Value,
         notification: bool,
-    ) -> BoxFuture<'_, Result<Option<Value>, JsonRpcError>> {
+        config: &'a Config,
+    ) -> BoxFuture<'a, Result<Option<Value>, JsonRpcError>> {
         Box::pin(async move {
-            let message: M =
-                serde_json::from_value(params).map_err(|_| JsonRpcError::invalid_params())?;
+            let message: M = serde_json_ext::from_value(params, config)
+                .map_err(|_| JsonRpcError::invalid_params())?;
             if notification {
                 self.address
                     .send_rpc(message)
@@ -134,7 +162,7 @@ where
                     .call_rpc(message)
                     .await
                     .map_err(|_| JsonRpcError::internal())?;
-                result.into_rpc_result().map(Some)
+                result.into_rpc_result_with_config(config).map(Some)
             }
         })
     }
@@ -145,6 +173,13 @@ where
 /// Use `Infallible` or `()` as the error type for handlers without business errors.
 pub trait RpcResult {
     fn into_rpc_result(self) -> Result<Value, JsonRpcError>;
+
+    fn into_rpc_result_with_config(self, _config: &Config) -> Result<Value, JsonRpcError>
+    where
+        Self: Sized,
+    {
+        self.into_rpc_result()
+    }
 }
 
 impl<R, E> RpcResult for Result<R, E>
@@ -153,8 +188,14 @@ where
     E: Into<JsonRpcError>,
 {
     fn into_rpc_result(self) -> Result<Value, JsonRpcError> {
+        self.into_rpc_result_with_config(&Config::default())
+    }
+
+    fn into_rpc_result_with_config(self, config: &Config) -> Result<Value, JsonRpcError> {
         match self {
-            Ok(value) => serde_json::to_value(value).map_err(|_| JsonRpcError::internal()),
+            Ok(value) => {
+                serde_json_ext::to_value(&value, config).map_err(|_| JsonRpcError::internal())
+            }
             Err(error) => Err(error.into()),
         }
     }
@@ -217,6 +258,7 @@ fn error_response(error: JsonRpcError, id: Value) -> Value {
 /// A JSON-RPC 2.0 method table. It does not own a network listener or transport.
 #[derive(Default)]
 pub struct Router {
+    config: Config,
     methods: HashMap<String, Arc<dyn ErasedMethod>>,
     topics: HashMap<String, Arc<dyn ErasedTopic>>,
 }
@@ -224,6 +266,13 @@ pub struct Router {
 impl Router {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Configure typed parameter decoding, handler results, and topic events.
+    /// Applies to all registrations, including those added before this call.
+    pub fn with_config(mut self, config: Config) -> Self {
+        self.config = config;
+        self
     }
 
     /// Expose a typed actor topic under an exact event name.
@@ -251,7 +300,7 @@ impl Router {
         self.topics
             .get(name)
             .ok_or_else(|| JsonRpcError::new(-32601, "Method not found"))?
-            .subscribe(params)
+            .subscribe(params, &self.config)
     }
 
     /// Register a typed actor message returning `Result<R, E>` under an exact method name.
@@ -335,7 +384,7 @@ impl Router {
         let notification = id.is_none();
         let params = request.remove("params").unwrap_or(Value::Null);
         let outcome = match self.methods.get(&method) {
-            Some(handler) => handler.invoke(params, notification).await,
+            Some(handler) => handler.invoke(params, notification, &self.config).await,
             None => Err(JsonRpcError::new(-32601, "Method not found")),
         };
         if notification {
